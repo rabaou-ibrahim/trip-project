@@ -1,0 +1,7 @@
+{
+    "require": {
+        "symfony/security-bundle": "^7.4",
+        "symfony/password-hasher": "^7.4",
+        "symfony/validator": "^7.4"
+    }
+}
