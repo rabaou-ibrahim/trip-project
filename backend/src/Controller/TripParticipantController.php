@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Entity\TripParticipant;
 use App\Entity\TripProject;
+use App\Entity\DestinationProposal;
 use App\Repository\UserRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;

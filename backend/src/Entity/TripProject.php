@@ -32,6 +32,10 @@ class TripProject
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?string $estimatedBudget = null;
 
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private?DestinationProposal $selectedDestination = null;
+
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private ?\DateTimeImmutable $createdAt = null;
 
@@ -116,6 +120,18 @@ class TripProject
     public function setEstimatedBudget(?string $estimatedBudget): static
     {
         $this->estimatedBudget = $estimatedBudget;
+
+        return $this;
+    }
+
+    public function getSelectedDestination(): ?DestinationProposal
+    {
+        return $this->selectedDestination;
+    }
+
+    public function setSelectedDestination(?DestinationProposal $selectedDestination): static
+    {
+        $this->selectedDestination = $selectedDestination;
 
         return $this;
     }
