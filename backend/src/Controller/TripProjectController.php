@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Entity\TripProject;
 use App\Entity\TripParticipant;
 use App\Entity\User;
+use App\Entity\DestinationProposal;
+use App\Entity\Vote;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -286,6 +288,109 @@ final class TripProjectController extends AbstractController
 
         return $this->json([
             'message' => 'Projet supprimé avec succès.',
+        ]);
+    }
+
+    /**
+     * Closes the destination vote and selects the winning proposal.
+     *
+     * Only the OWNER can close the vote.
+     */
+    #[Route(
+        '/api/trip-projects/{id}/close-destination-vote',
+        name: 'api_trip_project_close_destination_vote',
+        methods: ['PATCH']
+    )]
+    public function closeDestinationVote(
+        int $id,
+        EntityManagerInterface $entityManager,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $tripProject = $entityManager
+            ->getRepository(TripProject::class)
+            ->find($id);
+
+        if (!$tripProject) {
+            return $this->json(
+                ['message' => 'Projet introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        $participation = $entityManager
+            ->getRepository(TripParticipant::class)
+            ->findOneBy([
+                'user' => $user,
+                'tripProject' => $tripProject,
+            ]);
+
+        if (!$participation || $participation->getRole() !== 'OWNER') {
+            return $this->json(
+                ['message' => 'Seul le propriétaire peut clôturer le vote.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $proposals = $entityManager
+            ->getRepository(DestinationProposal::class)
+            ->findBy([
+                'tripProject' => $tripProject,
+            ]);
+
+        if (count($proposals) === 0) {
+            return $this->json(
+                ['message' => 'Aucune destination n’a été proposée.'],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
+        $winner = null;
+        $bestScore = null;
+        $tie = false;
+
+        foreach ($proposals as $proposal) {
+            $votes = $entityManager
+                ->getRepository(Vote::class)
+                ->findBy([
+                    'destinationProposal' => $proposal,
+                ]);
+
+            $score = 0;
+
+            foreach ($votes as $vote) {
+                $score += $vote->getValue();
+            }
+
+            if ($bestScore === null || $score > $bestScore) {
+                $bestScore = $score;
+                $winner = $proposal;
+                $tie = false;
+            } elseif ($score === $bestScore) {
+                $tie = true;
+            }
+        }
+
+        if ($tie) {
+            return $this->json(
+                ['message' => 'Le vote est à égalité entre plusieurs destinations.'],
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $tripProject
+            ->setSelectedDestination($winner)
+            ->setUpdatedAt(new \DateTimeImmutable());
+
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Vote clôturé. Destination gagnante sélectionnée.',
+            'selectedDestination' => [
+                'id' => $winner->getId(),
+                'city' => $winner->getCity(),
+                'country' => $winner->getCountry(),
+                'score' => $bestScore,
+            ],
         ]);
     }
 }
