@@ -1,6 +1,7 @@
 export const colors = {
   primary: '#2563EB',
-  secondary: '#0F766E',
+  secondary: '#10B981',
+  accent: '#F59E0B',
 
   background: '#F7F9FC',
   surface: '#FFFFFF',
@@ -12,8 +13,8 @@ export const colors = {
 
   border: '#E2E8F0',
 
-  success: '#16A34A',
-  warning: '#D97706',
-  error: '#DC2626',
-  info: '#0284C7',
+  success: '#10B981',
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#3B82F6',
 };

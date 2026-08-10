@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+
 import { colors, radius, spacing, typography } from '@/theme';
 
 type BadgeProps = {
@@ -12,7 +13,9 @@ export function Badge({
 }: BadgeProps) {
   return (
     <View style={[styles.badge, styles[variant]]}>
-      <Text style={styles.text}>{label}</Text>
+      <Text style={styles.text}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -20,6 +23,8 @@ export function Badge({
 const styles = StyleSheet.create({
   badge: {
     alignSelf: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
@@ -41,5 +46,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.medium,
+    lineHeight: 20,
+    textAlign: 'center',
   },
 });
