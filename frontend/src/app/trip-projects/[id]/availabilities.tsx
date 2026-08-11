@@ -22,7 +22,7 @@ export default function TripProjectAvailabilitiesScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
-  const [activeTab, setActiveTab] = useState<AvailabilityTab>('common');
+  const [activeTab, setActiveTab] = useState<AvailabilityTab>('mine');
 
   const isDesktop = width >= 1024;
 
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     marginLeft: spacing.lg,
     color: colors.textPrimary,
     fontSize: 25,
-    fontFamily: typography.fontFamily.bold,
+    fontFamily: typography.fontFamily.semibold,
   },
   panel: {
     minHeight: 300,
