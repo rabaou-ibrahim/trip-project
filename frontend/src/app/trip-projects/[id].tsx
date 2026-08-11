@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { DesktopSidebar } from '@/components/navigation/DesktopSidebar';
 import { MobileBottomNavigation } from '@/components/navigation/MobileBottomNavigation';
@@ -21,6 +21,7 @@ import { colors, radius, spacing, typography } from '@/theme';
 
 export default function TripProjectDetailScreen() {
   const router = useRouter();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
 
   const isDesktop = width >= 1024;
@@ -144,7 +145,9 @@ export default function TripProjectDetailScreen() {
                   role: 'Membre',
                 },
               ]}
-              onViewAll={() => console.log('Voir tous les participants')}
+              onViewAll={() => {
+                router.push(`/trip-projects/${id}/participants`);
+              }}
             />
           </View>
         </View>
