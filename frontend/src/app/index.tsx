@@ -11,6 +11,8 @@ import {
 import type { ComponentProps } from 'react';
 import { useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import { DesktopSidebar } from '@/components/navigation/DesktopSidebar';
 
 import { DesktopTripCard } from '@/components/home/DesktopTripCard';
 import { MobileCompactTripCard } from '@/components/home/MobileCompactTripCard';
@@ -19,6 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { colors, radius, spacing, typography } from '@/theme';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { width } = useWindowDimensions();
   const [activeTripIndex, setActiveTripIndex] = useState(0);
 
@@ -78,67 +81,19 @@ export default function HomeScreen() {
     );
   }
 
+  function openTripProject(id: number) {
+    router.push({
+      pathname: '/trip-projects/[id]',
+      params: {
+        id: String(id),
+      },
+    });
+  }
+
   if (isDesktop) {
     return (
       <View style={styles.desktopPage}>
-        <View style={styles.sidebar}>
-          <View>
-            <View style={styles.brand}>
-              <View style={styles.brandIcon}>
-                <Text style={styles.brandIconText}>✈</Text>
-              </View>
-
-              <Text style={styles.logo}>
-                TripProject
-              </Text>
-            </View>
-
-            <View style={styles.sidebarNavigation}>
-              <View style={styles.navItemActive}>
-                <Text style={styles.navIconActive}>⌂</Text>
-                <Text style={styles.sidebarItemActive}>Accueil</Text>
-              </View>
-
-              <View style={styles.navItem}>
-                <Text style={styles.navIcon}>✈</Text>
-                <Text style={styles.sidebarItem}>Voyages</Text>
-              </View>
-
-              <View style={styles.navItem}>
-                <Text style={styles.navIcon}>✉</Text>
-                <Text style={styles.sidebarItem}>Invitations</Text>
-              </View>
-
-              <View style={styles.navItem}>
-                <Text style={styles.navIcon}>◉</Text>
-                <Text style={styles.sidebarItem}>Profil</Text>
-              </View>
-
-              <View style={styles.navItem}>
-                <Text style={styles.navIcon}>⚙</Text>
-                <Text style={styles.sidebarItem}>Paramètres</Text>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.sidebarBottom}>
-            <View style={styles.logoutRow}>
-              <Text style={styles.navIcon}>↪</Text>
-              <Text style={styles.sidebarItem}>Déconnexion</Text>
-            </View>
-
-            <View style={styles.sidebarFooter}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>I</Text>
-              </View>
-
-              <View>
-                <Text style={styles.profileName}>Ibrahim</Text>
-                <Text style={styles.profileHint}>Mon profil</Text>
-              </View>
-            </View>
-          </View>
-        </View>
+        <DesktopSidebar activeItem="home" />
 
         <ScrollView
           style={styles.desktopContent}
@@ -181,7 +136,7 @@ export default function HomeScreen() {
                   currentStep="Votes en cours"
                   progress={67}
                   onPress={() => {
-                    console.log('Open Japan');
+                    openTripProject(1);
                   }}
                 />
 
@@ -198,7 +153,7 @@ export default function HomeScreen() {
                   currentStep="Hébergement"
                   progress={40}
                   onPress={() => {
-                    console.log('Open Lisbon');
+                    openTripProject(2);
                   }}
                 />
 
@@ -215,7 +170,7 @@ export default function HomeScreen() {
                   currentStep="Disponibilités"
                   progress={25}
                   onPress={() => {
-                    console.log('Open Italy');
+                    openTripProject(3);
                   }}
                 />
 
@@ -232,7 +187,7 @@ export default function HomeScreen() {
                   currentStep="Destinations"
                   progress={30}
                   onPress={() => {
-                    console.log('Open Thailand');
+                    openTripProject(4);
                   }}
                 />
               </View>
@@ -374,7 +329,7 @@ export default function HomeScreen() {
                 participantCount={trip.participantCount}
                 progress={trip.progress}
                 onPress={() => {
-                  console.log(`Open trip ${trip.id}`);
+                  openTripProject(trip.id);
                 }}
               />
             </View>
@@ -413,7 +368,7 @@ export default function HomeScreen() {
           }}
           participantCount={4}
           onPress={() => {
-            console.log('Open Lisbon trip');
+            openTripProject(2);
           }}
         />
 
@@ -428,7 +383,7 @@ export default function HomeScreen() {
           }}
           participantCount={4}
           onPress={() => {
-            console.log('Open Italy trip');
+            openTripProject(3);
           }}
         />
       </View>
