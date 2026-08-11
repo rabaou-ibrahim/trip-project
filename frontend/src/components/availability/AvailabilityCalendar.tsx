@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
@@ -13,21 +13,35 @@ type AvailabilityCalendarProps = {
 };
 
 const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-const EMPTY_CELLS = 3;
-const DAYS_IN_MONTH = 31;
+const TODAY = new Date();
+const INITIAL_YEAR = TODAY.getFullYear();
+const INITIAL_MONTH_INDEX = TODAY.getMonth();
 
-const INITIAL_AVAILABILITIES: Record<number, AvailabilityState> = {
-  14: 'available',
-  15: 'available',
-  16: 'available',
-  17: 'available',
-  18: 'available',
-  19: 'partial',
-  20: 'partial',
-  21: 'partial',
-  22: 'partial',
-  23: 'partial',
-  26: 'unavailable',
+const INITIAL_AVAILABILITIES: Record<string, AvailabilityState> = {
+  '2027-07-14': 'available',
+  '2027-07-15': 'available',
+  '2027-07-16': 'available',
+  '2027-07-17': 'available',
+  '2027-07-18': 'available',
+  '2027-07-19': 'partial',
+  '2027-07-20': 'partial',
+  '2027-07-21': 'partial',
+  '2027-07-22': 'partial',
+  '2027-07-23': 'partial',
+  '2027-07-26': 'unavailable',
+};
+
+const COMMON_AVAILABILITIES: Record<string, AvailabilityState> = {
+  '2027-07-14': 'partial',
+  '2027-07-15': 'available',
+  '2027-07-16': 'available',
+  '2027-07-17': 'available',
+  '2027-07-18': 'available',
+  '2027-07-19': 'available',
+  '2027-07-20': 'partial',
+  '2027-07-21': 'partial',
+  '2027-07-22': 'partial',
+  '2027-07-23': 'partial',
 };
 
 export function AvailabilityCalendar({
@@ -35,25 +49,61 @@ export function AvailabilityCalendar({
   isDesktop = false,
   onPrimaryAction,
 }: AvailabilityCalendarProps) {
-  const [availabilities, setAvailabilities] = useState(INITIAL_AVAILABILITIES);
+  const [availabilities, setAvailabilities] = useState(
+    INITIAL_AVAILABILITIES,
+  );
+  const [displayedMonth, setDisplayedMonth] = useState(
+    () => new Date(INITIAL_YEAR, INITIAL_MONTH_INDEX, 1),
+  );
 
-  const commonStateForDay = (day: number): AvailabilityState | undefined => {
-    if (day >= 14 && day <= 20) return day === 14 || day === 20 ? 'partial' : 'available';
-    if (day >= 21 && day <= 23) return 'partial';
-    return undefined;
+  const year = displayedMonth.getFullYear();
+  const monthIndex = displayedMonth.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const emptyCells = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+
+  const monthLabel = useMemo(() => {
+    const value = displayedMonth.toLocaleDateString('fr-FR', {
+      month: 'long',
+      year: 'numeric',
+    });
+
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  }, [displayedMonth]);
+
+  const isInitialMonth =
+    year === INITIAL_YEAR && monthIndex === INITIAL_MONTH_INDEX;
+
+  const changeMonth = (offset: number) => {
+    setDisplayedMonth(
+      current =>
+        new Date(
+          current.getFullYear(),
+          current.getMonth() + offset,
+          1,
+        ),
+    );
   };
+
+  const resetMonth = () => {
+    setDisplayedMonth(new Date(INITIAL_YEAR, INITIAL_MONTH_INDEX, 1));
+  };
+
+  const dateKeyForDay = (day: number) =>
+    `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
   const handleDayPress = (day: number) => {
     if (mode === 'common') return;
 
-    setAvailabilities((current) => {
-      const next = { ...current };
-      const state = current[day];
+    const dateKey = dateKeyForDay(day);
 
-      if (!state) next[day] = 'available';
-      else if (state === 'available') next[day] = 'partial';
-      else if (state === 'partial') next[day] = 'unavailable';
-      else delete next[day];
+    setAvailabilities(current => {
+      const next = { ...current };
+      const state = current[dateKey];
+
+      if (!state) next[dateKey] = 'available';
+      else if (state === 'available') next[dateKey] = 'partial';
+      else if (state === 'partial') next[dateKey] = 'unavailable';
+      else delete next[dateKey];
 
       return next;
     });
@@ -61,33 +111,40 @@ export function AvailabilityCalendar({
 
   return (
     <View style={[styles.wrapper, isDesktop && styles.desktopWrapper]}>
-      <View style={styles.calendarCard}>
+      <View style={[styles.calendarCard, isDesktop && styles.desktopCalendarCard]}>
         <View style={styles.monthHeader}>
-          <Pressable
-            onPress={() => console.log('Mois précédent')}
-            accessibilityRole="button"
-            accessibilityLabel="Afficher le mois précédent"
-            style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
-          </Pressable>
+        <MonthButton
+          icon="chevron-back"
+          label="Afficher le mois précédent"
+          onPress={() => changeMonth(-1)}
+        />
 
-          <View style={styles.monthIdentity}>
-            <Text style={styles.month}>Juillet 2027</Text>
-            {mode === 'mine' && (
-              <Text style={styles.monthHint}>Touchez un jour pour modifier son état</Text>
-            )}
-          </View>
+        <Text style={styles.monthTitle}>
+          {monthLabel}
+        </Text>
 
+        <MonthButton
+          icon="chevron-forward"
+          label="Afficher le mois suivant"
+          onPress={() => changeMonth(1)}
+        />
+      </View>
+
+        {!isInitialMonth && (
           <Pressable
-            onPress={() => console.log('Mois suivant')}
+            onPress={resetMonth}
             accessibilityRole="button"
-            accessibilityLabel="Afficher le mois suivant"
-            style={({ pressed }) => [styles.monthButton, pressed && styles.pressed]}
+            accessibilityLabel="Revenir au mois actuel"
+            style={({ pressed }) => [
+              styles.resetMonthButton,
+              pressed && styles.pressed,
+            ]}
           >
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            <Text style={styles.resetMonthText}>
+              Revenir à aujourd’hui
+            </Text>
           </Pressable>
-        </View>
+        )}
 
         <View style={styles.weekRow}>
           {WEEKDAYS.map((weekday, index) => (
@@ -98,24 +155,30 @@ export function AvailabilityCalendar({
         </View>
 
         <View style={styles.daysGrid}>
-          {Array.from({ length: EMPTY_CELLS }).map((_, index) => (
-            <View key={`empty-${index}`} style={[styles.dayCell, isDesktop ? styles.desktopDayCell : styles.mobileDayCell,]} />
+          {Array.from({ length: emptyCells }).map((_, index) => (
+            <View key={`empty-${index}`} style={styles.dayCell} />
           ))}
 
-          {Array.from({ length: DAYS_IN_MONTH }).map((_, index) => {
+          {Array.from({ length: daysInMonth }).map((_, index) => {
             const day = index + 1;
+            const dateKey = dateKeyForDay(day);
             const state =
-              mode === 'mine' ? availabilities[day] : commonStateForDay(day);
+              mode === 'mine'
+                ? availabilities[dateKey]
+                : COMMON_AVAILABILITIES[dateKey];
 
             return (
-              <View key={day} style={[styles.dayCell, isDesktop ? styles.desktopDayCell: styles.mobileDayCell,]}>
+              <View key={dateKey} style={styles.dayCell}>
                 <Pressable
                   onPress={() => handleDayPress(day)}
                   disabled={mode === 'common'}
                   accessibilityRole="button"
-                  accessibilityLabel={`${day} juillet 2027${state ? `, ${state}` : ''}`}
+                  accessibilityLabel={`${day} ${monthLabel}${state ? `, ${state}` : ''}`}
                   style={({ pressed }) => [
                     styles.dayButton,
+                    isDesktop
+                      ? styles.desktopDayButton
+                      : styles.mobileDayButton,
                     state === 'available' && styles.availableDay,
                     state === 'partial' && styles.partialDay,
                     state === 'unavailable' && styles.unavailableDay,
@@ -144,14 +207,20 @@ export function AvailabilityCalendar({
         <LegendItem color="#EF5B5B" label="Indisponible" />
       </View>
 
-      {mode === 'common' && (
+      {mode === 'common' && isInitialMonth && (
         <View style={styles.commonSummary}>
           <View style={styles.summaryIcon}>
-            <Ionicons name="checkmark-circle-outline" size={23} color={colors.secondary} />
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={23}
+              color={colors.secondary}
+            />
           </View>
           <View style={styles.summaryText}>
             <Text style={styles.summaryValue}>2 périodes communes</Text>
-            <Text style={styles.summaryLabel}>identifiées pour tous les participants</Text>
+            <Text style={styles.summaryLabel}>
+              identifiées pour tous les participants
+            </Text>
           </View>
         </View>
       )}
@@ -159,14 +228,43 @@ export function AvailabilityCalendar({
       <Pressable
         onPress={onPrimaryAction}
         accessibilityRole="button"
-        style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.primaryButton,
+          pressed && styles.pressed,
+        ]}
       >
         <Text style={styles.primaryButtonText}>
-          {mode === 'mine' ? 'Enregistrer mes disponibilités' : 'Proposer des destinations'}
+          {mode === 'mine'
+            ? 'Enregistrer mes disponibilités'
+            : 'Proposer des destinations'}
         </Text>
         <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
       </Pressable>
     </View>
+  );
+}
+
+function MonthButton({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: 'chevron-back' | 'chevron-forward';
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.monthButton,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons name={icon} size={20} color={colors.textSecondary} />
+    </Pressable>
   );
 }
 
@@ -180,8 +278,12 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
-  wrapper: { width: '100%' },
-  desktopWrapper: { maxWidth: 760, alignSelf: 'center' },
+  wrapper: { 
+    width: '100%' 
+  },
+  desktopWrapper: { 
+    maxWidth: 760, alignSelf: 'center' 
+  },
   calendarCard: {
     padding: spacing.md,
     backgroundColor: colors.surface,
@@ -190,74 +292,89 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
   },
   monthHeader: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing.sm,
   },
   monthButton: {
-    width: 38,
-    height: 38,
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.full,
   },
-  monthIdentity: { flex: 1, alignItems: 'center' },
-  month: {
+  monthTitle: {
     color: colors.textPrimary,
-    fontSize: typography.fontSize.md,
+    fontSize: 19,
+    fontFamily: typography.fontFamily.bold,
+  },
+  resetMonthButton: {
+    alignSelf: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: '#EAF1FF',
+    borderRadius: radius.full,
+  },
+  resetMonthText: {
+    color: colors.primary,
+    fontSize: typography.fontSize.xs,
     fontFamily: typography.fontFamily.semibold,
   },
-  monthHint: {
-    marginTop: 2,
-    color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.fontFamily.regular,
+  weekRow: { 
+    marginTop: spacing.lg, 
+    flexDirection: 'row' 
   },
-  weekRow: { marginTop: spacing.lg, flexDirection: 'row' },
   weekday: {
     width: '14.2857%',
     color: colors.textMuted,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.medium,
+    fontSize: 11,
+    fontFamily: typography.fontFamily.semibold,
     textAlign: 'center',
   },
-  daysGrid: { marginTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap' },
+  daysGrid: {
+    marginTop: spacing.sm,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
   dayCell: {
     width: '14.2857%',
-    padding: 2,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-    mobileDayCell: {
-    aspectRatio: 1.18,
-    },
-
-    desktopDayCell: {
-    height: 54,
-    },
-    desktopDayButton: {
-    width: 52,
-    height: 42,
-    },
   dayButton: {
-    width: '100%',
-    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.sm,
   },
+  mobileDayButton: { width: 40, height: 38 },
+  desktopDayButton: {
+    width: 54,
+    height: 34,
+  },
   dayText: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.medium,
+    fontFamily: typography.fontFamily.semibold,
   },
-  availableDay: { backgroundColor: '#CBEFD9' },
-  partialDay: { backgroundColor: '#16A879' },
-  unavailableDay: { backgroundColor: '#FDE1E1' },
-  strongDayText: { color: '#FFFFFF', fontFamily: typography.fontFamily.semibold },
-  unavailableDayText: { color: colors.error },
+  availableDay: { 
+    backgroundColor: '#CBEFD9' 
+  },
+  partialDay: { 
+    backgroundColor: '#16A879' 
+  },
+  unavailableDay: { 
+    backgroundColor: '#FDE1E1' 
+  },
+  strongDayText: {
+    color: '#FFFFFF',
+    fontFamily: typography.fontFamily.semibold,
+  },
+  unavailableDayText: { 
+    color: colors.error 
+  },
   legend: {
     marginTop: spacing.lg,
     flexDirection: 'row',
@@ -266,12 +383,19 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.lg,
   },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  legendColor: { width: 13, height: 13, borderRadius: 4 },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  legendColor: { 
+    width: 13, height: 13, 
+    borderRadius: 4 
+  },
   legendLabel: {
     color: colors.textSecondary,
     fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
+    fontFamily: typography.fontFamily.medium,
   },
   commonSummary: {
     marginTop: spacing.xl,
@@ -319,6 +443,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: typography.fontSize.sm,
     fontFamily: typography.fontFamily.semibold,
+  },
+  desktopCalendarCard: {
+    width: '100%',
+    maxWidth: 580,
+    alignSelf: 'center',
   },
   pressed: { opacity: 0.72 },
 });

@@ -265,8 +265,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginLeft: spacing.lg,
     color: colors.textPrimary,
-    fontSize: typography.fontSize.xl,
-    fontFamily: typography.fontFamily.semibold,
+    fontSize: 25,
+    fontFamily: typography.fontFamily.bold,
   },
   panel: {
     minHeight: 300,
