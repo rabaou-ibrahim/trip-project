@@ -8,30 +8,35 @@ import {
 } from 'react-native';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { TripProjectHeader } from '@/components/trip-project-detail/TripProjectHeader';
-import { TripProjectProgress } from '@/components/trip-project-detail/TripProjectProgress';
+import { useRouter } from 'expo-router';
+
 import { DesktopSidebar } from '@/components/navigation/DesktopSidebar';
 import { MobileBottomNavigation } from '@/components/navigation/MobileBottomNavigation';
+import { TripProjectHeader } from '@/components/trip-project-detail/TripProjectHeader';
+import { TripProjectKeyInfo } from '@/components/trip-project-detail/TripProjectKeyInfo';
+import { TripProjectProgress } from '@/components/trip-project-detail/TripProjectProgress';
+import { TripProjectSummary } from '@/components/trip-project-detail/TripProjectSummary';
+import { TripProjectParticipants } from '@/components/trip-project-detail/TripProjectParticipants';
 import { colors, radius, spacing, typography } from '@/theme';
 
 export default function TripProjectDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
   const { width } = useWindowDimensions();
 
   const isDesktop = width >= 1024;
 
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/');
+    }
+  };
+
   const detailContent = (
     <>
       <Pressable
-        onPress={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace('/');
-          }
-        }}
+        onPress={handleBack}
         accessibilityRole="button"
         accessibilityLabel="Revenir à l’accueil"
         style={({ pressed }) => [
@@ -50,22 +55,100 @@ export default function TripProjectDetailScreen() {
 
       <View style={styles.content}>
         <TripProjectHeader
-            title="Japon été 2027"
-            city="Tokyo"
-            country="Japon"
-            startDate="2027-07-15"
-            endDate="2027-07-20"
-            participantCount={5}
-            isDesktop={isDesktop}
-            onShare={() => console.log('Partager le projet')}
-            onMore={() => console.log('Options du projet')}
+          title="Japon été 2027"
+          city="Tokyo"
+          country="Japon"
+          startDate="2027-07-15"
+          endDate="2027-07-20"
+          participantCount={5}
+          isDesktop={isDesktop}
+          onShare={() => console.log('Partager le projet')}
+          onMore={() => console.log('Options du projet')}
         />
+
         <TripProjectProgress
-            currentStep={3}
-            activeEndStep={4}
-            isDesktop={isDesktop}
+          currentStep={3}
+          activeEndStep={4}
+          isDesktop={isDesktop}
         />
+
+        <View
+          style={[
+            styles.detailsGrid,
+            isDesktop && styles.desktopDetailsGrid,
+          ]}
+        >
+          <View
+            style={[
+              styles.detailColumn,
+              isDesktop && styles.desktopDetailColumn,
+            ]}
+          >
+            <TripProjectSummary
+              isDesktop={isDesktop}
+              proposedDestinationCount={2}
+              pendingVoteCount={3}
+              onViewVotes={() => console.log('Voir les votes')}
+            />
+          </View>
+
+          <View
+            style={[
+              styles.detailColumn,
+              isDesktop && styles.desktopDetailColumn,
+            ]}
+          >
+            <TripProjectKeyInfo
+              startDate="2027-07-15"
+              endDate="2027-07-20"
+              estimatedBudget={1200}
+              currency="EUR"
+              voteStatus="Votes en cours"
+              createdAt="2026-05-12"
+              isDesktop={isDesktop}
+            />
+          </View>
+          <View
+            style={[
+              styles.detailColumn,
+              isDesktop && styles.desktopDetailColumn,
+            ]}
+          >
+            <TripProjectParticipants
+              isDesktop={isDesktop}
+              participants={[
+                {
+                  id: 1,
+                  firstName: 'Ibrahim',
+                  role: 'Propriétaire',
+                  isCurrentUser: true,
+                },
+                {
+                  id: 2,
+                  firstName: 'Alice',
+                  role: 'Membre',
+                },
+                {
+                  id: 3,
+                  firstName: 'Mehdi',
+                  role: 'Membre',
+                },
+                {
+                  id: 4,
+                  firstName: 'Lucas',
+                  role: 'Membre',
+                },
+                {
+                  id: 5,
+                  firstName: 'Chloé',
+                  role: 'Membre',
+                },
+              ]}
+              onViewAll={() => console.log('Voir tous les participants')}
+            />
+          </View>
         </View>
+      </View>
     </>
   );
 
@@ -163,24 +246,22 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
 
-  eyebrow: {
-    color: colors.primary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
-    letterSpacing: 1,
+  detailsGrid: {
+    width: '100%',
+    gap: spacing.lg,
   },
 
-  title: {
-    marginTop: spacing.sm,
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.xxl,
-    fontFamily: typography.fontFamily.bold,
+  desktopDetailsGrid: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
   },
 
-  description: {
-    marginTop: spacing.md,
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.md,
-    fontFamily: typography.fontFamily.regular,
+  detailColumn: {
+    width: '100%',
+  },
+
+  desktopDetailColumn: {
+    flex: 1,
+    width: 'auto',
   },
 });
