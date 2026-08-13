@@ -47,63 +47,212 @@ const initialProposals: DestinationProposal[] = [
 
 export default function DestinationsScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{
+    id?: string | string[];
+  }>();
+
+  const tripProjectId = Array.isArray(id) ? id[0] : id;
   const { width } = useWindowDimensions();
   const isDesktop = width >= DESKTOP_BREAKPOINT;
 
   const [proposals, setProposals] = useState(initialProposals);
 
-  const leadingProposal = useMemo(
-    () =>
-      [...proposals].sort(
-        (first, second) => second.votes - first.votes,
-      )[0],
-    [proposals],
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+
+  const [summaryVisible, setSummaryVisible] = useState(false);
+
+  const leadingProposal = [...proposals].sort(
+  (first, second) => second.votes - first.votes,
+  )[0];
+
+  const currentVote = proposals.find((proposal) => proposal.hasVoted) ?? null;
+
+  const selectedProposal = proposals.find((proposal) => proposal.id === selectedProposalId,) ?? null;
+
+  const summaryProposal =
+  selectedProposal ?? currentVote ?? leadingProposal ?? null;
+
+  const totalVotes = proposals.reduce(
+    (total, proposal) => total + proposal.votes,
+    0,
   );
 
+  const selectedVoteShare =
+    selectedProposal && totalVotes > 0
+      ? Math.round((selectedProposal.votes / totalVotes) * 100)
+      : 0;
+
+  const handleSelectProposal = (proposalId: string) => {
+    setSelectedProposalId(proposalId);
+    setSummaryVisible(true);
+  };
+
   const handleBack = () => {
-    if (!id) {
+    if (!tripProjectId) {
       router.replace('/');
       return;
     }
 
     router.replace({
       pathname: '/trip-projects/[id]',
-      params: { id },
+      params: { id: tripProjectId },
     });
   };
 
   const handleVote = (proposalId: string) => {
-    setProposals((currentProposals) =>
-      currentProposals.map((proposal) => {
-        if (proposal.id !== proposalId) {
-          return proposal;
+    setProposals((currentProposals) => {
+      const clickedProposal = currentProposals.find(
+        (proposal) => proposal.id === proposalId,
+      );
+
+      if (!clickedProposal) {
+        return currentProposals;
+      }
+
+      const isRemovingVote = clickedProposal.hasVoted;
+
+      return currentProposals.map((proposal) => {
+        if (proposal.id === proposalId) {
+          return {
+            ...proposal,
+            hasVoted: !isRemovingVote,
+            votes: Math.max(
+              0,
+              proposal.votes + (isRemovingVote ? -1 : 1),
+            ),
+          };
         }
 
-        return {
-          ...proposal,
-          hasVoted: !proposal.hasVoted,
-          votes: Math.max(
-            0,
-            proposal.votes + (proposal.hasVoted ? -1 : 1),
-          ),
-        };
-      }),
-    );
+        if (!isRemovingVote && proposal.hasVoted) {
+          return {
+            ...proposal,
+            hasVoted: false,
+            votes: Math.max(0, proposal.votes - 1),
+          };
+        }
+
+        return proposal;
+      });
+    });
   };
 
   const cards = (
-    <View style={[styles.cards, isDesktop && styles.desktopCards]}>
+    <View style={styles.cards}>
       {proposals.map((proposal) => (
         <DestinationProposalCard
           key={proposal.id}
           proposal={proposal}
           isDesktop={isDesktop}
-          onPress={() => console.log('Ouvrir', proposal.id)}
+          onPress={() => handleSelectProposal(proposal.id)}
           onVote={() => handleVote(proposal.id)}
         />
       ))}
     </View>
+  );
+
+  const voteSummary = summaryVisible && summaryProposal ? (
+    <View
+      style={[
+        styles.summaryCard,
+        !isDesktop && styles.mobileSummaryCard,
+      ]}
+    >
+      <View style={styles.summaryHeaderRow}>
+        <View style={styles.summaryIcon}>
+          <Ionicons
+            name="stats-chart-outline"
+            size={22}
+            color={colors.primary}
+          />
+        </View>
+
+        <Pressable
+          onPress={() => setSummaryVisible(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Masquer le résumé du vote"
+          style={({ pressed }) => [
+            styles.summaryCloseButton,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Ionicons
+            name="close"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </View>
+
+      <Text style={styles.summaryTitle}>
+        PROPOSITION CONSULTÉE
+      </Text>
+
+      <Text style={styles.summaryCity}>
+        {summaryProposal.city}
+      </Text>
+
+      <Text style={styles.summaryCountry}>
+        {summaryProposal.flag} {summaryProposal.country}
+      </Text>
+
+      <View style={styles.summaryDivider} />
+
+      <Text style={styles.summaryVotes}>
+        {summaryProposal.votes} vote
+        {summaryProposal.votes > 1 ? 's' : ''} actuellement
+      </Text>
+
+      <Text style={styles.summaryText}>
+        {leadingProposal
+          ? `${leadingProposal.city} est actuellement en tête.`
+          : 'Aucune proposition en tête.'}
+      </Text>
+
+      <View style={styles.currentVoteBox}>
+        <Ionicons
+          name={
+            currentVote
+              ? 'checkmark-circle'
+              : 'remove-circle-outline'
+          }
+          size={20}
+          color={
+            currentVote ? colors.secondary : colors.textMuted
+          }
+        />
+
+        <View>
+          <Text style={styles.currentVoteLabel}>
+            Votre vote
+          </Text>
+
+          <Text style={styles.currentVoteCity}>
+            {currentVote?.city ?? 'Aucun vote enregistré'}
+          </Text>
+        </View>
+      </View>
+    </View>
+  ) : (
+    <Pressable
+      onPress={() => setSummaryVisible(true)}
+      accessibilityRole="button"
+      accessibilityLabel="Afficher le résumé du vote"
+      style={({ pressed }) => [
+        styles.reopenSummaryButton,
+        !isDesktop && styles.mobileReopenSummaryButton,
+        pressed && styles.pressed,
+      ]}
+    >
+      <Ionicons
+        name="stats-chart-outline"
+        size={18}
+        color={colors.primary}
+      />
+
+      <Text style={styles.reopenSummaryText}>
+        Afficher le vote
+      </Text>
+    </Pressable>
   );
 
   const pageContent = (
@@ -144,61 +293,16 @@ export default function DestinationsScreen() {
 
       {isDesktop ? (
         <View style={styles.desktopBody}>
-          <View style={styles.desktopMainColumn}>{cards}</View>
-
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <Ionicons
-                name="podium-outline"
-                size={23}
-                color={colors.primary}
-              />
-            </View>
-
-            <Text style={styles.summaryTitle}>En tête du vote</Text>
-            <Text style={styles.summaryCity}>{leadingProposal.city}</Text>
-            <Text style={styles.summaryCountry}>
-              {leadingProposal.flag} {leadingProposal.country}
-            </Text>
-
-            <View style={styles.summaryDivider} />
-
-            <Text style={styles.summaryVotes}>
-              {leadingProposal.votes} votes actuellement
-            </Text>
-            <Text style={styles.summaryText}>
-              Les participants peuvent encore modifier leur choix avant la clôture.
-            </Text>
-
-            <Pressable
-              onPress={() => console.log('Voir les détails et votes')}
-              style={({ pressed }) => [
-                styles.detailsButton,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.detailsButtonText}>
-                Voir les détails et votes
-              </Text>
-              <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
-            </Pressable>
+          <View style={styles.desktopMainColumn}>
+            {cards}
           </View>
+
+          {voteSummary}
         </View>
       ) : (
         <>
+          {voteSummary}
           {cards}
-
-          <Pressable
-            onPress={() => console.log('Voir les détails et votes')}
-            style={({ pressed }) => [
-              styles.mobilePrimaryButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.mobilePrimaryButtonText}>
-              Voir les détails et votes
-            </Text>
-          </Pressable>
         </>
       )}
     </>
@@ -410,33 +514,72 @@ const styles = StyleSheet.create({
     fontFamily: typography.fontFamily.regular,
     lineHeight: 18,
   },
-  detailsButton: {
-    minHeight: 46,
+  mobileSummaryCard: {
+    width: '100%',
     marginTop: spacing.xl,
+  },
+
+  summaryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  summaryCloseButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.full,
+  },
+
+  currentVoteBox: {
+    marginTop: spacing.xl,
+    padding: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: '#E8F8F1',
+    borderWidth: 1,
+    borderColor: '#BDE8D5',
+    borderRadius: radius.md,
+  },
+
+  currentVoteLabel: {
+    color: colors.textSecondary,
+    fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily.regular,
+  },
+
+  currentVoteCity: {
+    marginTop: 2,
+    color: colors.secondary,
+    fontSize: typography.fontSize.sm,
+    fontFamily: typography.fontFamily.semibold,
+  },
+
+  reopenSummaryButton: {
+    width: 300,
+    minHeight: 46,
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
   },
-  detailsButtonText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  mobilePrimaryButton: {
-    minHeight: 50,
+
+  mobileReopenSummaryButton: {
+    width: '100%',
     marginTop: spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
   },
-  mobilePrimaryButtonText: {
-    color: '#FFFFFF',
+
+  reopenSummaryText: {
+    color: colors.primary,
     fontSize: typography.fontSize.sm,
     fontFamily: typography.fontFamily.semibold,
   },

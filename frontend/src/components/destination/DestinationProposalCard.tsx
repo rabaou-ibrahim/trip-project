@@ -77,10 +77,15 @@ export function DestinationProposalCard({
 
     <View style={[styles.content, isDesktop && styles.desktopContent]}>
       <View style={styles.contentHeader}>
-        <View style={styles.destinationIdentity}>
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Consulter ${proposal.city}`}
+          style={styles.destinationIdentity}
+        >
           <Text style={styles.city}>{proposal.city}</Text>
           <Text style={styles.country}>{proposal.country}</Text>
-        </View>
+        </Pressable>
 
         <Pressable
           onPress={onPress}
@@ -110,7 +115,14 @@ export function DestinationProposalCard({
       <Pressable
         onPress={onVote}
         accessibilityRole="button"
-        accessibilityLabel={`Voter pour ${proposal.city}`}
+        accessibilityLabel={
+          proposal.hasVoted
+            ? `${proposal.city}, votre choix actuel`
+            : `Voter pour ${proposal.city}`
+        }
+        accessibilityState={{
+          selected: proposal.hasVoted,
+        }}
         style={({ pressed }) => [
           styles.voteButton,
           isDesktop && styles.desktopVoteButton,
@@ -121,7 +133,7 @@ export function DestinationProposalCard({
         <Ionicons
           name={
             proposal.hasVoted
-              ? 'thumbs-up'
+              ? 'checkmark-circle'
               : 'thumbs-up-outline'
           }
           size={15}
@@ -138,7 +150,7 @@ export function DestinationProposalCard({
             proposal.hasVoted && styles.votedButtonText,
           ]}
         >
-          {proposal.hasVoted ? "J’aime" : 'Voter'}
+          {proposal.hasVoted ? 'Votre choix' : 'Voter'}
         </Text>
       </Pressable>
     </View>
@@ -225,14 +237,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.xs,
     fontFamily: typography.fontFamily.semibold,
   },
-  headingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  headingCopy: {
-    flex: 1,
-  },
   city: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.lg,
@@ -254,17 +258,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.sm,
     fontFamily: typography.fontFamily.semibold,
-  },
-  defaultVoteButton: {
-    backgroundColor: '#EDF3FF',
-    borderColor: '#D7E4FF',
-  },
-  selectedVoteButton: {
-    backgroundColor: '#E9F8F1',
-    borderColor: '#CBECDD',
-  },
-  selectedVoteButtonText: {
-    color: colors.secondary,
   },
   content: {
     flex: 1,
