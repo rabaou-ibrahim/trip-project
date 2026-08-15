@@ -32,7 +32,7 @@ final class RegistrationController extends AbstractController
         }
 
         $email = strtolower(trim((string) ($data['email'] ?? '')));
-        $username = trim((string) ($data['username'] ?? ''));
+        $username = mb_strtolower(trim((string) ($data['username'] ?? '')));
         $firstname = trim((string) ($data['firstname'] ?? ''));
         $lastname = trim((string) ($data['lastname'] ?? ''));
         $plainPassword = (string) ($data['password'] ?? '');

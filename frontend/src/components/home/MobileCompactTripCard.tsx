@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius, typography } from '@/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 
 type SelectedDestination = {
   id: number;
@@ -26,55 +26,65 @@ export function MobileCompactTripCard({
   participantCount,
   onPress,
 }: MobileCompactTripCardProps) {
+  const destinationLabel = selectedDestination
+    ? `${selectedDestination.city}, ${translateCountry(selectedDestination.country)}`
+    : 'Destination à définir';
+
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Ouvrir le voyage ${title}`}
-      style={({ pressed }) => [
-        styles.card,
-        pressed && styles.cardPressed,
-      ]}
-    >
-      <CountryFlag country={selectedDestination?.country ?? null} />
+    <View style={styles.frame}>
+      <View style={styles.paperOffset} />
 
-      <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={1}>
-          {title}
-        </Text>
-
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText} numberOfLines={1}>
-            {startDate && endDate
-              ? formatDateRange(startDate, endDate)
-              : 'Dates à définir'}
-          </Text>
-
-          <View style={styles.separator} />
-
-          <Text style={styles.metaText} numberOfLines={1}>
-            {participantCount} participant
-            {participantCount > 1 ? 's' : ''}
-          </Text>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Ouvrir le voyage ${title}`}
+        style={({ pressed }) => [
+          styles.card,
+          pressed && styles.cardPressed,
+        ]}
+      >
+        <View style={styles.flagStamp}>
+          <CountryFlag country={selectedDestination?.country ?? null} />
         </View>
-      </View>
 
-      <View style={styles.chevronContainer}>
-        <Ionicons
-          name="chevron-forward"
-          size={17}
-          color="#8295AC"
-        />
-      </View>
-    </Pressable>
+        <View style={styles.content}>
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+          <Text style={styles.destination} numberOfLines={1}>
+            {destinationLabel}
+          </Text>
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaItem}>
+              <Ionicons name="calendar-outline" size={13} color="#56718E" />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {startDate && endDate
+                  ? formatDateRange(startDate, endDate)
+                  : 'Dates à définir'}
+              </Text>
+            </View>
+
+            <View style={styles.metaDot} />
+
+            <View style={styles.metaItem}>
+              <Ionicons name="people-outline" size={13} color="#56718E" />
+              <Text style={styles.metaText} numberOfLines={1}>
+                {participantCount}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.chevronContainer}>
+          <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+        </View>
+      </Pressable>
+    </View>
   );
 }
 
-type CountryFlagProps = {
-  country: string | null;
-};
-
-function CountryFlag({ country }: CountryFlagProps) {
+function CountryFlag({ country }: { country: string | null }) {
   const normalized = country?.trim().toLowerCase();
 
   if (normalized === 'japan' || normalized === 'japon') {
@@ -130,10 +140,22 @@ function CountryFlag({ country }: CountryFlagProps) {
   );
 }
 
+function translateCountry(country: string): string {
+  const translations: Record<string, string> = {
+    Japan: 'Japon',
+    Italy: 'Italie',
+    Spain: 'Espagne',
+    Germany: 'Allemagne',
+    Greece: 'Grèce',
+    Morocco: 'Maroc',
+    Thailand: 'Thaïlande',
+  };
+  return translations[country] ?? country;
+}
+
 function formatDateRange(startDate: string, endDate: string): string {
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
-
   const sameMonth =
     start.getMonth() === end.getMonth() &&
     start.getFullYear() === end.getFullYear();
@@ -143,7 +165,6 @@ function formatDateRange(startDate: string, endDate: string): string {
       month: 'short',
       year: 'numeric',
     });
-
     return `${start.getDate()} – ${end.getDate()} ${monthYear}`;
   }
 
@@ -159,162 +180,131 @@ function formatDate(date: string): string {
 }
 
 const styles = StyleSheet.create({
-  card: {
+  frame: {
+    position: 'relative',
     width: '100%',
-    minHeight: 84,
-    paddingHorizontal: 13,
-    paddingVertical: 12,
-
+    minHeight: 104,
+  },
+  paperOffset: {
+    position: 'absolute',
+    top: 5,
+    right: -3,
+    bottom: -5,
+    left: 4,
+    borderRadius: 18,
+    backgroundColor: '#DED0BA',
+    transform: [{ rotate: '0.6deg' }],
+  },
+  card: {
+    minHeight: 104,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-
-    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E3EAF2',
-    borderRadius: radius.lg,
-
-    elevation: 2,
+    borderColor: '#E3D8C8',
+    borderRadius: 18,
+    backgroundColor: '#FFFDF8',
   },
-
-  cardPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
+  cardPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
+  flagStamp: {
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#D8C5A8',
+    borderStyle: 'dashed',
+    borderRadius: 10,
+    backgroundColor: '#F4EADB',
+    transform: [{ rotate: '-2deg' }],
   },
-
-  content: {
-    flex: 1,
-    minWidth: 0,
-    gap: 7,
-  },
-
+  content: { flex: 1, minWidth: 0 },
   title: {
-    color: colors.textPrimary,
-    fontSize: 13.5,
-    fontFamily: typography.fontFamily.semibold,
-    letterSpacing: -0.1,
+    color: colors.brandDark,
+    fontSize: 14,
+    fontFamily: typography.fontFamily.displayBold,
+    letterSpacing: -0.15,
   },
-
-  metaRow: {
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-
-  metaText: {
-    flexShrink: 1,
+  destination: {
+    marginTop: 3,
     color: colors.textSecondary,
-    fontSize: 11.5,
+    fontSize: 11,
     fontFamily: typography.fontFamily.regular,
   },
-
-  separator: {
+  metaRow: {
+    minWidth: 0,
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaItem: {
+    minWidth: 0,
+    flexShrink: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    flexShrink: 1,
+    color: '#56718E',
+    fontSize: 10.5,
+    fontFamily: typography.fontFamily.medium,
+  },
+  metaDot: {
     width: 3,
     height: 3,
     flexShrink: 0,
-    backgroundColor: '#A5B3C3',
     borderRadius: radius.full,
+    backgroundColor: '#B09A78',
   },
-
   chevronContainer: {
-    width: 22,
-    height: 32,
+    width: 30,
+    height: 30,
     flexShrink: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#D8E4F0',
+    borderRadius: radius.full,
+    backgroundColor: '#F2F7FC',
   },
-
   flagContainer: {
     position: 'relative',
     width: 42,
     height: 36,
-    flexShrink: 0,
     overflow: 'hidden',
-
-    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DFE7F0',
-    borderRadius: 9,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
   },
-
-  japanFlag: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
+  japanFlag: { alignItems: 'center', justifyContent: 'center' },
   japanCircle: {
     width: 15,
     height: 15,
-    backgroundColor: '#E32636',
     borderRadius: radius.full,
+    backgroundColor: '#E32636',
   },
-
-  portugalFlag: {
-    position: 'relative',
-    flex: 1,
-    flexDirection: 'row',
-  },
-
-  portugalGreen: {
-    width: '40%',
-    backgroundColor: '#087A42',
-  },
-
-  portugalRed: {
-    flex: 1,
-    backgroundColor: '#D52331',
-  },
-
+  portugalFlag: { position: 'relative', flex: 1, flexDirection: 'row' },
+  portugalGreen: { width: '40%', backgroundColor: '#087A42' },
+  portugalRed: { flex: 1, backgroundColor: '#D52331' },
   portugalEmblem: {
     position: 'absolute',
     left: '31%',
     top: 10,
     width: 8,
     height: 13,
-    backgroundColor: '#F4C542',
     borderRadius: radius.full,
+    backgroundColor: '#F4C542',
   },
-
-  italyFlag: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-
-  italyGreen: {
-    flex: 1,
-    backgroundColor: '#138B51',
-  },
-
-  italyWhite: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-
-  italyRed: {
-    flex: 1,
-    backgroundColor: '#D72B3F',
-  },
-
-  thailandFlag: {
-    flex: 1,
-  },
-
-  thailandRedStripe: {
-    flex: 1,
-    backgroundColor: '#C92B3B',
-  },
-
-  thailandWhiteStripe: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-
-  thailandBlueStripe: {
-    flex: 2,
-    backgroundColor: '#263A75',
-  },
-
+  italyFlag: { flex: 1, flexDirection: 'row' },
+  italyGreen: { flex: 1, backgroundColor: '#138B51' },
+  italyWhite: { flex: 1, backgroundColor: '#FFFFFF' },
+  italyRed: { flex: 1, backgroundColor: '#D72B3F' },
+  thailandFlag: { flex: 1 },
+  thailandRedStripe: { flex: 1, backgroundColor: '#C92B3B' },
+  thailandWhiteStripe: { flex: 1, backgroundColor: '#FFFFFF' },
+  thailandBlueStripe: { flex: 2, backgroundColor: '#263A75' },
   worldFlag: {
     alignItems: 'center',
     justifyContent: 'center',

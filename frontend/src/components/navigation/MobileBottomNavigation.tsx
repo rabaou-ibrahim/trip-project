@@ -35,7 +35,10 @@ export function MobileBottomNavigation({
       router.push('/');
       return;
     }
-
+    if (item === 'profile') {
+      router.push('/profile');
+      return;
+    }
     console.log(`Open mobile navigation: ${item}`);
   }
 

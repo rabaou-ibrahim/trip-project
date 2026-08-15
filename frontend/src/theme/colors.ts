@@ -3,8 +3,13 @@ export const colors = {
   secondary: '#10B981',
   accent: '#F59E0B',
 
+  brandDark: '#071E33',
+  brandDarkSurface: '#0F2B46',
+
   background: '#F7F9FC',
+  backgroundWarm: '#F6F2EA',
   surface: '#FFFFFF',
+  surfaceWarm: '#FFFCF7',
   surfaceMuted: '#F1F5F9',
 
   textPrimary: '#0F172A',
