@@ -4,6 +4,8 @@ export const typography = {
     medium: 'Inter_500Medium',
     semibold: 'Inter_600SemiBold',
     bold: 'Inter_700Bold',
+    displaySemibold: 'SplineSans_600SemiBold',
+    displayBold: 'SplineSans_700Bold',
   },
 
   fontSize: {

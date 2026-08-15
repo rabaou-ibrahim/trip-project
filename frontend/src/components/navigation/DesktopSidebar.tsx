@@ -1,4 +1,5 @@
-import type { ComponentProps } from 'react';
+import { useState, type ComponentProps } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -56,9 +57,35 @@ export function DesktopSidebar({
 }: DesktopSidebarProps) {
   const router = useRouter();
 
+  const { user, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const displayedName = user?.firstname || user?.username || 'Utilisateur';
+  const avatarInitial =
+    displayedName.trim().charAt(0).toUpperCase() || '?';
+
+  async function handleLogout() {
+    if (signingOut) {
+      return;
+    }
+
+    setSigningOut(true);
+
+    try {
+      await signOut();
+      router.replace('/welcome');
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
   function handleNavigation(item: NavigationItemId) {
     if (item === 'home') {
       router.push('/');
+      return;
+    }
+    if (item === 'profile') {
+      router.push('/profile');
       return;
     }
 
@@ -120,14 +147,20 @@ export function DesktopSidebar({
 
       <View style={styles.bottom}>
         <Pressable
-          onPress={() => console.log('Logout')}
+          onPress={() => void handleLogout()}
+          disabled={signingOut}
+          accessibilityRole="button"
+          accessibilityLabel="Se déconnecter"
           style={({ pressed }) => [
             styles.logoutRow,
-            pressed && styles.itemPressed,
+            pressed && !signingOut && styles.itemPressed,
           ]}
         >
           <Ionicons name="log-out-outline" size={19} color="#AFC0D0" />
-          <Text style={styles.navigationLabel}>Déconnexion</Text>
+
+          <Text style={styles.navigationLabel}>
+            {signingOut ? 'Déconnexion…' : 'Déconnexion'}
+          </Text>
         </Pressable>
 
         <Pressable
@@ -138,11 +171,11 @@ export function DesktopSidebar({
           ]}
         >
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>I</Text>
+            <Text style={styles.avatarText}>{avatarInitial}</Text>
           </View>
 
           <View>
-            <Text style={styles.profileName}>Ibrahim</Text>
+            <Text style={styles.profileName}>{displayedName}</Text>
             <Text style={styles.profileHint}>Mon profil</Text>
           </View>
         </Pressable>
