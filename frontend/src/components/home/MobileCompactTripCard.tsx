@@ -15,7 +15,16 @@ type MobileCompactTripCardProps = {
   endDate: string | null;
   selectedDestination: SelectedDestination | null;
   participantCount: number;
+  participantsPreview: {
+    id: number;
+    userId: number;
+    firstname: string;
+    username: string;
+    avatar: string | null;
+  } [];
+  status: string;
   onPress: () => void;
+  isDesktop?: boolean;
 };
 
 export function MobileCompactTripCard({
@@ -24,72 +33,170 @@ export function MobileCompactTripCard({
   endDate,
   selectedDestination,
   participantCount,
+  participantsPreview,
+  status,
   onPress,
+  isDesktop = false,
 }: MobileCompactTripCardProps) {
   const destinationLabel = selectedDestination
     ? `${selectedDestination.city}, ${translateCountry(selectedDestination.country)}`
     : 'Destination à définir';
 
-  return (
-    <View style={styles.frame}>
-      <View style={styles.paperOffset} />
+  const progress = getProjectProgress(status);
 
-      <Pressable
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={`Ouvrir le voyage ${title}`}
-        style={({ pressed }) => [
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Ouvrir le voyage ${title}`}
+      style={({ pressed }) => [
           styles.card,
+          isDesktop && styles.desktopCard,
           pressed && styles.cardPressed,
         ]}
       >
-        <View style={styles.flagStamp}>
-          <CountryFlag country={selectedDestination?.country ?? null} />
+      <View style={[styles.thumbnail, isDesktop && styles.desktopThumbnail]}>
+        {selectedDestination ? (
+          <CountryFlag country={selectedDestination.country} isDesktop={isDesktop} />
+        ) : (
+          <View style={styles.placeholderThumbnail}>
+            <Ionicons
+              name="image-outline"
+              size={22}
+              color={colors.textMuted}
+            />
+          </View>
+        )}
+      </View>
+
+      <View style={[styles.content, isDesktop && styles.desktopContent]}>
+        <View style={styles.headingRow}>
+          <View style={styles.headingCopy}>
+            <Text
+              style={[styles.title, isDesktop && styles.desktopTitle]}
+              numberOfLines={1}
+            >
+              {title}
+            </Text>
+
+            <Text
+              style={[styles.destination, isDesktop && styles.desktopDestination]}
+              numberOfLines={1}
+            >
+              {destinationLabel}
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={17}
+            color={colors.textMuted}
+          />
         </View>
 
-        <View style={styles.content}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
+        <View
+          style={[
+            styles.dateRow,
+            isDesktop && styles.desktopDateRow,
+          ]}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={13}
+            color={colors.textSecondary}
+          />
+
+          <Text style={[styles.dateText, isDesktop && styles.desktopDateText]}>
+            {startDate && endDate
+              ? formatDateRange(startDate, endDate)
+              : 'Dates à définir'}
           </Text>
-          <Text style={styles.destination} numberOfLines={1}>
-            {destinationLabel}
-          </Text>
+        </View>
 
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Ionicons name="calendar-outline" size={13} color="#56718E" />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {startDate && endDate
-                  ? formatDateRange(startDate, endDate)
-                  : 'Dates à définir'}
-              </Text>
-            </View>
+        <View
+          style={[
+            styles.footer,
+            isDesktop && styles.desktopFooter,
+          ]}
+        >
+          <View style={styles.avatarGroup}>
+            {participantsPreview.slice(0, 4).map((participant, index) => (
+              <ParticipantAvatar
+                key={participant.id}
+                participant={participant}
+                index={index}
+              />
+            ))}
 
-            <View style={styles.metaDot} />
+            {participantCount > 4 && (
+              <View style={[styles.avatar, styles.extraAvatar]}>
+                <Text style={styles.extraAvatarText}>
+                  +{participantCount - 4}
+                </Text>
+              </View>
+            )}
+          </View>
 
-            <View style={styles.metaItem}>
-              <Ionicons name="people-outline" size={13} color="#56718E" />
-              <Text style={styles.metaText} numberOfLines={1}>
-                {participantCount}
-              </Text>
+          <View style={[styles.progressArea, isDesktop && styles.desktopProgressArea, ]}
+>
+            <Text style={styles.progressLabel}>
+              {formatProgressLabel(status)}
+            </Text>
+
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { width: `${progress}%` },
+                ]}
+              />
             </View>
           </View>
         </View>
+      </View>
+    </Pressable>
+  );
+}
 
-        <View style={styles.chevronContainer}>
-          <Ionicons name="arrow-forward" size={16} color={colors.primary} />
-        </View>
-      </Pressable>
+function ParticipantAvatar({
+  participant,
+  index,
+}: {
+  participant: {
+    firstname: string;
+    username: string;
+    avatar: string | null;
+  };
+  index: number;
+}) {
+  const initial =
+    participant.firstname?.trim().charAt(0).toUpperCase() ||
+    participant.username?.trim().charAt(0).toUpperCase() ||
+    '?';
+
+  return (
+    <View
+      style={[
+        styles.avatar,
+        index > 0 && styles.overlappingAvatar,
+      ]}
+    >
+      <Text style={styles.avatarText}>{initial}</Text>
     </View>
   );
 }
 
-function CountryFlag({ country }: { country: string | null }) {
+function CountryFlag({ country, isDesktop = false, }: { country: string | null; isDesktop?: boolean; }) {
   const normalized = country?.trim().toLowerCase();
 
   if (normalized === 'japan' || normalized === 'japon') {
     return (
-      <View style={[styles.flagContainer, styles.japanFlag]}>
+      <View
+        style={[
+          styles.flagContainer,
+          isDesktop && styles.desktopFlagContainer,
+        ]}
+      >
         <View style={styles.japanCircle} />
       </View>
     );
@@ -97,7 +204,8 @@ function CountryFlag({ country }: { country: string | null }) {
 
   if (normalized === 'portugal') {
     return (
-      <View style={styles.flagContainer}>
+      <View style={[ styles.flagContainer, isDesktop && styles.desktopFlagContainer, ]}
+>
         <View style={styles.portugalFlag}>
           <View style={styles.portugalGreen} />
           <View style={styles.portugalRed} />
@@ -109,7 +217,7 @@ function CountryFlag({ country }: { country: string | null }) {
 
   if (normalized === 'italy' || normalized === 'italie') {
     return (
-      <View style={styles.flagContainer}>
+      <View style={[ styles.flagContainer, isDesktop && styles.desktopFlagContainer, ]}>
         <View style={styles.italyFlag}>
           <View style={styles.italyGreen} />
           <View style={styles.italyWhite} />
@@ -121,7 +229,8 @@ function CountryFlag({ country }: { country: string | null }) {
 
   if (normalized === 'thailand' || normalized === 'thaïlande') {
     return (
-      <View style={styles.flagContainer}>
+      <View style={[ styles.flagContainer, isDesktop && styles.desktopFlagContainer, ]}
+>
         <View style={styles.thailandFlag}>
           <View style={styles.thailandRedStripe} />
           <View style={styles.thailandWhiteStripe} />
@@ -134,7 +243,12 @@ function CountryFlag({ country }: { country: string | null }) {
   }
 
   return (
-    <View style={[styles.flagContainer, styles.worldFlag]}>
+    <View
+      style={[
+        styles.flagContainer,
+        isDesktop && styles.desktopFlagContainer,
+      ]}
+    >
       <Ionicons name="earth-outline" size={18} color={colors.primary} />
     </View>
   );
@@ -179,135 +293,335 @@ function formatDate(date: string): string {
   });
 }
 
+function getProjectProgress(status: string): number {
+  switch (status.trim().toLowerCase()) {
+    case 'completed':
+      return 100;
+    case 'ready':
+      return 85;
+    case 'active':
+    case 'in_progress':
+      return 60;
+    case 'draft':
+    default:
+      return 25;
+  }
+}
+
+function formatProgressLabel(status: string): string {
+  switch (status.trim().toLowerCase()) {
+    case 'completed':
+      return 'Terminé';
+    case 'ready':
+      return 'Presque prêt';
+    case 'active':
+    case 'in_progress':
+      return 'En préparation';
+    case 'draft':
+    default:
+      return 'En préparation';
+  }
+}
+
 const styles = StyleSheet.create({
-  frame: {
-    position: 'relative',
-    width: '100%',
-    minHeight: 104,
-  },
-  paperOffset: {
-    position: 'absolute',
-    top: 5,
-    right: -3,
-    bottom: -5,
-    left: 4,
-    borderRadius: 18,
-    backgroundColor: '#DED0BA',
-    transform: [{ rotate: '0.6deg' }],
-  },
   card: {
-    minHeight: 104,
+    width: '100%',
+    minHeight: 132,
+    flexDirection: 'row',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E5EBF2',
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.06,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+
+  desktopCard: {
+    minHeight: 190,
+    borderRadius: 18,
+  },
+
+  desktopThumbnail: {
+    width: 180,
+    minHeight: 190,
+    padding: 14,
+  },
+
+  desktopContent: {
+    paddingHorizontal: 24,
+    paddingVertical: 20,
+  },
+
+  desktopTitle: {
+    fontSize: 23,
+    lineHeight: 29,
+  },
+
+  desktopDestination: {
+    marginTop: 4,
+    fontSize: 15,
+    lineHeight: 20,
+  },
+
+  desktopDateText: {
+    fontSize: 14,
+  },
+
+  desktopProgressArea: {
+    maxWidth: 220,
+  },
+
+  thumbnail: {
+    width: 82,
+    minHeight: 132,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F4F8FC',
+  },
+
+  desktopFooter: {
+    marginTop: 18,
+  },
+
+  desktopDateRow: {
+    marginTop: 13,
+  },
+
+  content: {
+    flex: 1,
+    minWidth: 0,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: '#E3D8C8',
-    borderRadius: 18,
-    backgroundColor: '#FFFDF8',
   },
-  cardPressed: { opacity: 0.9, transform: [{ scale: 0.99 }] },
-  flagStamp: {
-    padding: 3,
-    borderWidth: 1,
-    borderColor: '#D8C5A8',
-    borderStyle: 'dashed',
-    borderRadius: 10,
-    backgroundColor: '#F4EADB',
-    transform: [{ rotate: '-2deg' }],
-  },
-  content: { flex: 1, minWidth: 0 },
+
   title: {
-    color: colors.brandDark,
-    fontSize: 14,
+    color: '#1A1C23',
+    fontSize: 15,
+    lineHeight: 19,
     fontFamily: typography.fontFamily.displayBold,
-    letterSpacing: -0.15,
   },
+
   destination: {
-    marginTop: 3,
-    color: colors.textSecondary,
+    marginTop: 2,
+    color: '#64748B',
     fontSize: 11,
     fontFamily: typography.fontFamily.regular,
   },
-  metaRow: {
+
+  cardPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.995 }],
+  },
+
+  placeholderThumbnail: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF4FA',
+  },
+
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+
+  headingCopy: {
+    flex: 1,
     minWidth: 0,
-    marginTop: 8,
+  },
+
+  dateRow: {
+    marginTop: 7,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
-  metaItem: {
-    minWidth: 0,
-    flexShrink: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaText: {
-    flexShrink: 1,
-    color: '#56718E',
+
+  dateText: {
+    color: '#475569',
     fontSize: 10.5,
     fontFamily: typography.fontFamily.medium,
   },
-  metaDot: {
-    width: 3,
-    height: 3,
-    flexShrink: 0,
-    borderRadius: radius.full,
-    backgroundColor: '#B09A78',
+
+  footer: {
+    marginTop: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  chevronContainer: {
-    width: 30,
-    height: 30,
-    flexShrink: 0,
+
+  avatarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  avatar: {
+    width: 27,
+    height: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#D8E4F0',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     borderRadius: radius.full,
-    backgroundColor: '#F2F7FC',
+    backgroundColor: '#DCEBFA',
+
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
   },
+
+  overlappingAvatar: {
+    marginLeft: -8,
+  },
+
+  avatarText: {
+    color: colors.primary,
+    fontSize: 9.5,
+    fontFamily: typography.fontFamily.bold,
+  },
+
+  extraAvatar: {
+    marginLeft: -7,
+    backgroundColor: '#F0F4F8',
+  },
+
+  extraAvatarText: {
+    color: colors.textSecondary,
+    fontSize: 8.5,
+    fontFamily: typography.fontFamily.semibold,
+  },
+
+  progressArea: {
+    flex: 1,
+    maxWidth: 105,
+  },
+
+  progressLabel: {
+    marginBottom: 4,
+    color: '#64748B',
+    fontSize: 9,
+    textAlign: 'right',
+    fontFamily: typography.fontFamily.medium,
+  },
+
+  progressTrack: {
+    height: 4,
+    overflow: 'hidden',
+    borderRadius: radius.full,
+    backgroundColor: '#E8EEF5',
+  },
+
+  progressFill: {
+    height: '100%',
+    borderRadius: radius.full,
+    backgroundColor: '#00BFA6',
+  },
+
+  desktopFlagContainer: {
+    width: 72,
+    height: 98,
+  },
+
   flagContainer: {
     position: 'relative',
-    width: 42,
-    height: 36,
+    width: 54,
+    height: 76,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#DFE7F0',
-    borderRadius: 8,
+    borderColor: '#E6ECF3',
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
   },
-  japanFlag: { alignItems: 'center', justifyContent: 'center' },
+
+  japanFlag: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   japanCircle: {
-    width: 15,
-    height: 15,
+    width: 18,
+    height: 18,
     borderRadius: radius.full,
     backgroundColor: '#E32636',
   },
-  portugalFlag: { position: 'relative', flex: 1, flexDirection: 'row' },
-  portugalGreen: { width: '40%', backgroundColor: '#087A42' },
-  portugalRed: { flex: 1, backgroundColor: '#D52331' },
+
+  portugalFlag: {
+    position: 'relative',
+    flex: 1,
+    flexDirection: 'row',
+  },
+
+  portugalGreen: {
+    width: '40%',
+    backgroundColor: '#087A42',
+  },
+
+  portugalRed: {
+    flex: 1,
+    backgroundColor: '#D52331',
+  },
+
   portugalEmblem: {
     position: 'absolute',
     left: '31%',
-    top: 10,
+    top: 28,
     width: 8,
     height: 13,
     borderRadius: radius.full,
     backgroundColor: '#F4C542',
   },
-  italyFlag: { flex: 1, flexDirection: 'row' },
-  italyGreen: { flex: 1, backgroundColor: '#138B51' },
-  italyWhite: { flex: 1, backgroundColor: '#FFFFFF' },
-  italyRed: { flex: 1, backgroundColor: '#D72B3F' },
-  thailandFlag: { flex: 1 },
-  thailandRedStripe: { flex: 1, backgroundColor: '#C92B3B' },
-  thailandWhiteStripe: { flex: 1, backgroundColor: '#FFFFFF' },
-  thailandBlueStripe: { flex: 2, backgroundColor: '#263A75' },
+
+  italyFlag: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+
+  italyGreen: {
+    flex: 1,
+    backgroundColor: '#138B51',
+  },
+
+  italyWhite: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+
+  italyRed: {
+    flex: 1,
+    backgroundColor: '#D72B3F',
+  },
+
+  thailandFlag: {
+    flex: 1,
+  },
+
+  thailandRedStripe: {
+    flex: 1,
+    backgroundColor: '#C92B3B',
+  },
+
+  thailandWhiteStripe: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+
+  thailandBlueStripe: {
+    flex: 2,
+    backgroundColor: '#263A75',
+  },
+
   worldFlag: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: '#F2F6FA',
   },
 });

@@ -7,6 +7,9 @@ use App\Entity\TripParticipant;
 use App\Entity\User;
 use App\Entity\DestinationProposal;
 use App\Entity\Vote;
+use App\Repository\TripParticipantRepository;
+use App\Repository\TripProjectRepository;
+use App\Repository\AvailabilityRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -39,6 +42,9 @@ final class TripProjectController extends AbstractController
 
         $title = trim((string) ($data['title'] ?? ''));
         $description = trim((string) ($data['description'] ?? ''));
+        $startDate = $data['startDate'] ?? null;
+        $endDate = $data['endDate'] ?? null;
+        $estimatedBudget = $data['estimatedBudget'] ?? null;
 
         if ($title === '') {
             return $this->json(
@@ -53,6 +59,32 @@ final class TripProjectController extends AbstractController
             ->setTitle($title)
             ->setDescription($description !== '' ? $description : null)
             ->setStatus('draft');
+
+        if ($startDate !== null && $startDate !== '') {
+            try {
+                $tripProject->setStartDate(new \DateTime($startDate));
+            } catch (\Exception) {
+                return $this->json(
+                    ['message' => 'La date de début est invalide.'],
+                    Response::HTTP_BAD_REQUEST
+                );
+            }
+        }
+
+        if ($endDate !== null && $endDate !== '') {
+            try {
+                $tripProject->setEndDate(new \DateTime($endDate));
+            } catch (\Exception) {
+                return $this->json(
+                    ['message' => 'La date de fin est invalide.'],
+                    Response::HTTP_BAD_REQUEST
+                );
+            }
+        }
+
+        if ($estimatedBudget !== null && $estimatedBudget !== '') {
+            $tripProject->setEstimatedBudget((string) $estimatedBudget);
+        }
 
         $participant = new TripParticipant();
 
@@ -76,6 +108,9 @@ final class TripProjectController extends AbstractController
                     'title' => $tripProject->getTitle(),
                     'description' => $tripProject->getDescription(),
                     'status' => $tripProject->getStatus(),
+                    'startDate' => $tripProject->getStartDate()?->format('Y-m-d'),
+                    'endDate' => $tripProject->getEndDate()?->format('Y-m-d'),
+                    'estimatedBudget' => $tripProject->getEstimatedBudget(),
                 ],
             ],
             Response::HTTP_CREATED
@@ -84,28 +119,50 @@ final class TripProjectController extends AbstractController
 
     #[Route('/api/trip-projects', name: 'api_trip_project_list', methods: ['GET'])]
     public function list(
-        EntityManagerInterface $entityManager,
+        TripParticipantRepository $participantRepository,
         #[CurrentUser] User $user
     ): JsonResponse {
-        $participations = $entityManager
-            ->getRepository(TripParticipant::class)
-            ->findBy(['user' => $user]);
+        $participations = $participantRepository->findAcceptedForUser($user);
+        $tripProjects = array_map(
+            static fn (TripParticipant $participation): TripProject =>
+                $participation->getTripProject(),
+            $participations
+        );
+        $participantCounts = $participantRepository
+            ->countAcceptedByProjects($tripProjects);
 
         $projects = [];
 
         foreach ($participations as $participation) {
             $tripProject = $participation->getTripProject();
+            $tripProjectId = (int) $tripProject->getId();
 
-            $projects[] = [
-                'id' => $tripProject->getId(),
-                'title' => $tripProject->getTitle(),
-                'description' => $tripProject->getDescription(),
-                'status' => $tripProject->getStatus(),
-                'startDate' => $tripProject->getStartDate()?->format('Y-m-d'),
-                'endDate' => $tripProject->getEndDate()?->format('Y-m-d'),
-                'estimatedBudget' => $tripProject->getEstimatedBudget(),
-                'role' => $participation->getRole(),
-            ];
+            $participantsPreview = $participantRepository
+                ->findAcceptedPreview($tripProject, 4);
+
+            $projects[] = array_merge(
+                $this->serializeTripProject(
+                    $tripProject,
+                    $participation,
+                    $participantCounts[$tripProjectId] ?? 0
+                ),
+                [
+                    'participantsPreview' => array_map(
+                        static function (TripParticipant $participant): array {
+                            $participantUser = $participant->getUser();
+
+                            return [
+                                'id' => $participant->getId(),
+                                'userId' => $participantUser->getId(),
+                                'firstname' => $participantUser->getFirstname(),
+                                'username' => $participantUser->getUsername(),
+                                'avatar' => $participantUser->getAvatar(),
+                            ];
+                        },
+                        $participantsPreview
+                    ),
+                ]
+            );
         }
 
         return $this->json($projects);
@@ -115,6 +172,8 @@ final class TripProjectController extends AbstractController
     public function show(
         int $id,
         EntityManagerInterface $entityManager,
+        TripParticipantRepository $participantRepository,
+        AvailabilityRepository $availabilityRepository,
         #[CurrentUser] User $user
     ): JsonResponse {
         $tripProject = $entityManager
@@ -128,12 +187,8 @@ final class TripProjectController extends AbstractController
             );
         }
 
-        $participation = $entityManager
-            ->getRepository(TripParticipant::class)
-            ->findOneBy([
-                'user' => $user,
-                'tripProject' => $tripProject,
-            ]);
+        $participation = $participantRepository
+            ->findAcceptedMembership($user, $tripProject);
 
         if (!$participation) {
             return $this->json(
@@ -142,16 +197,67 @@ final class TripProjectController extends AbstractController
             );
         }
 
-        return $this->json([
-            'id' => $tripProject->getId(),
-            'title' => $tripProject->getTitle(),
-            'description' => $tripProject->getDescription(),
-            'status' => $tripProject->getStatus(),
-            'startDate' => $tripProject->getStartDate()?->format('Y-m-d'),
-            'endDate' => $tripProject->getEndDate()?->format('Y-m-d'),
-            'estimatedBudget' => $tripProject->getEstimatedBudget(),
-            'role' => $participation->getRole(),
-        ]);
+        $participantsPreview = $participantRepository
+            ->findAcceptedPreview($tripProject);
+
+        $pendingInvitations = $participantRepository
+            ->findPendingForProject($tripProject);
+        
+            $acceptedParticipantCount =
+        $participantRepository->countAcceptedForProject($tripProject);
+
+        $usersWithAvailabilityCount =
+        $availabilityRepository->countDistinctUsersForProject($tripProject);
+
+        $availabilitiesStepCompleted =
+        $tripProject->isParticipantsStepCompleted()
+        && $acceptedParticipantCount > 0
+        && $usersWithAvailabilityCount >= $acceptedParticipantCount;
+
+        return $this->json(array_merge(
+        $this->serializeTripProject(
+            $tripProject,
+            $participation,
+            $acceptedParticipantCount
+        ),
+        [
+            'availabilitiesStepCompleted' => $availabilitiesStepCompleted,
+
+            'participantsPreview' => array_map(
+                static function (TripParticipant $participant) use ($user): array {
+                    $participantUser = $participant->getUser();
+
+                    return [
+                        'id' => $participant->getId(),
+                        'userId' => $participantUser->getId(),
+                        'firstname' => $participantUser->getFirstname(),
+                        'username' => $participantUser->getUsername(),
+                        'avatar' => $participantUser->getAvatar(),
+                        'role' => $participant->getRole(),
+                        'isCurrentUser' =>
+                            $participantUser->getId() === $user->getId(),
+                    ];
+                },
+                $participantsPreview
+            ),
+            'pendingInvitations' => array_map(
+                static function (TripParticipant $participant): array {
+                    $participantUser = $participant->getUser();
+
+                    return [
+                        'id' => $participant->getId(),
+                        'userId' => $participantUser->getId(),
+                        'email' => $participantUser->getEmail(),
+                        'firstname' => $participantUser->getFirstname(),
+                        'username' => $participantUser->getUsername(),
+                        'status' => $participant->getStatus(),
+                        'createdAt' => $participant->getCreatedAt()?->format(DATE_ATOM),
+                        ];
+                },
+                $pendingInvitations
+                ),
+        ]
+    ));
     }
 
     #[Route('/api/trip-projects/{id}', name: 'api_trip_project_update', methods: ['PATCH'])]
@@ -227,6 +333,36 @@ final class TripProjectController extends AbstractController
                     : null
             );
         }
+
+        if (array_key_exists('startDate', $data)) {
+        if ($data['startDate'] === null || $data['startDate'] === '') {
+            $tripProject->setStartDate(null);
+        } else {
+            try {
+                $tripProject->setStartDate(new \DateTime((string) $data['startDate']));
+            } catch (\Exception) {
+                return $this->json(
+                    ['message' => 'La date de début est invalide.'],
+                    Response::HTTP_BAD_REQUEST
+                );
+            }
+        }
+    }
+
+    if (array_key_exists('endDate', $data)) {
+        if ($data['endDate'] === null || $data['endDate'] === '') {
+            $tripProject->setEndDate(null);
+        } else {
+            try {
+                $tripProject->setEndDate(new \DateTime((string) $data['endDate']));
+            } catch (\Exception) {
+                return $this->json(
+                    ['message' => 'La date de fin est invalide.'],
+                    Response::HTTP_BAD_REQUEST
+                );
+            }
+        }
+    }
 
         $tripProject->setUpdatedAt(new \DateTimeImmutable());
 
@@ -391,6 +527,310 @@ final class TripProjectController extends AbstractController
                 'country' => $winner->getCountry(),
                 'score' => $bestScore,
             ],
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeTripProject(
+        TripProject $tripProject,
+        TripParticipant $participation,
+        int $participantCount
+    ): array {
+        $selectedDestination = $tripProject->getSelectedDestination();
+
+        return [
+            'id' => $tripProject->getId(),
+            'title' => $tripProject->getTitle(),
+            'description' => $tripProject->getDescription(),
+            'status' => $tripProject->getStatus(),
+            'startDate' => $tripProject->getStartDate()?->format('Y-m-d'),
+            'endDate' => $tripProject->getEndDate()?->format('Y-m-d'),
+            'estimatedBudget' => $tripProject->getEstimatedBudget(),
+            'role' => $participation->getRole(),
+            'participantCount' => $participantCount,
+            'selectedDestination' => $selectedDestination === null
+                ? null
+                : [
+                    'id' => $selectedDestination->getId(),
+                    'city' => $selectedDestination->getCity(),
+                    'country' => $selectedDestination->getCountry(),
+                ],
+            'createdAt' => $tripProject->getCreatedAt()?->format(DATE_ATOM),
+            'updatedAt' => $tripProject->getUpdatedAt()?->format(DATE_ATOM),
+            'participantsStepCompleted' => $tripProject->isParticipantsStepCompleted(),
+        ];
+    }
+
+    #[Route(
+        '/api/trip-projects/{id}/participants/invite',
+        name: 'api_trip_project_invite_participant',
+        methods: ['POST']
+    )]
+    public function inviteParticipant(
+        int $id,
+        Request $request,
+        EntityManagerInterface $entityManager,
+        TripParticipantRepository $participantRepository,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $tripProject = $entityManager
+            ->getRepository(TripProject::class)
+            ->find($id);
+
+        if (!$tripProject) {
+            return $this->json(
+                ['message' => 'Projet introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        $membership = $participantRepository
+            ->findAcceptedMembership($user, $tripProject);
+
+        if (!$membership || $membership->getRole() !== 'OWNER') {
+            return $this->json(
+                ['message' => 'Seul le propriétaire peut inviter un participant.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $data = $request->toArray();
+        $email = trim((string) ($data['email'] ?? ''));
+
+        if ($email === '') {
+            return $this->json(
+                ['message' => 'L’adresse e-mail est obligatoire.'],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
+        $invitedUser = $entityManager
+            ->getRepository(User::class)
+            ->findOneBy(['email' => $email]);
+
+        if (!$invitedUser) {
+            return $this->json(
+                ['message' => 'Aucun utilisateur ne correspond à cette adresse e-mail.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        if ($invitedUser->getId() === $user->getId()) {
+            return $this->json(
+                ['message' => 'Vous participez déjà à ce projet.'],
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $existingParticipation = $participantRepository->findOneBy([
+            'user' => $invitedUser,
+            'tripProject' => $tripProject,
+        ]);
+
+        if ($existingParticipation) {
+            return $this->json(
+                ['message' => 'Cet utilisateur est déjà participant ou invité.'],
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $invitation = new TripParticipant();
+
+        $invitation
+            ->setUser($invitedUser)
+            ->setTripProject($tripProject)
+            ->setRole('MEMBER')
+            ->setStatus('PENDING');
+
+        $entityManager->persist($invitation);
+        $entityManager->flush();
+
+        return $this->json(
+            [
+                'message' => 'Invitation envoyée.',
+                'invitation' => [
+                    'id' => $invitation->getId(),
+                    'userId' => $invitedUser->getId(),
+                    'email' => $invitedUser->getEmail(),
+                    'firstname' => $invitedUser->getFirstname(),
+                    'username' => $invitedUser->getUsername(),
+                    'status' => $invitation->getStatus(),
+                    'createdAt' => $invitation->getCreatedAt()?->format(DATE_ATOM),
+                ],
+            ],
+            Response::HTTP_CREATED
+        );
+    }
+
+    #[Route(
+        '/api/trip-projects/{id}/participants/complete',
+        name: 'api_trip_projects_participants_complete',
+        methods: ['PATCH']
+    )]
+    public function completeParticipantsStep(
+        TripProject $tripProject,
+        EntityManagerInterface $entityManager,
+        TripParticipantRepository $participantRepository,
+    ): JsonResponse {
+        $user = $this->getUser();
+
+        if (!$user instanceof User) {
+            return $this->json([
+                'message' => 'Utilisateur non authentifié.',
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $membership = $participantRepository
+            ->findOneBy([
+                'tripProject' => $tripProject,
+                'user' => $user,
+            ]);
+
+        if (
+            !$membership ||
+            $membership->getRole() !== 'OWNER'
+        ) {
+            return $this->json([
+                'message' => 'Seul le propriétaire peut terminer cette étape.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        $tripProject->setParticipantsStepCompleted(true);
+        $tripProject->setUpdatedAt(new \DateTimeImmutable());
+
+        $entityManager->flush();
+
+        return $this->json([
+            'participantsStepCompleted' => true,
+        ]);
+    }
+
+    #[Route(
+        '/api/invitations',
+        name: 'api_invitations_list',
+        methods: ['GET']
+    )]
+    public function listInvitations(
+        TripParticipantRepository $participantRepository,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $invitations = $participantRepository
+            ->findPendingForUser($user);
+
+        return $this->json(
+            array_map(
+                static function (TripParticipant $invitation): array {
+                    $tripProject = $invitation->getTripProject();
+
+                    return [
+                        'id' => $invitation->getId(),
+                        'status' => $invitation->getStatus(),
+                        'createdAt' => $invitation->getCreatedAt()?->format(DATE_ATOM),
+
+                        'tripProject' => [
+                            'id' => $tripProject->getId(),
+                            'title' => $tripProject->getTitle(),
+                        ],
+                    ];
+                },
+                $invitations
+            )
+        );
+    }
+
+    #[Route(
+        '/api/invitations/{id}/accept',
+        name: 'api_invitation_accept',
+        methods: ['PATCH']
+    )]
+    
+    public function acceptInvitation(
+        string $id,
+        EntityManagerInterface $entityManager,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $invitation = $entityManager
+            ->getRepository(TripParticipant::class)
+            ->find($id);
+
+        if (!$invitation) {
+            return $this->json(
+                ['message' => 'Invitation introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        if ($invitation->getUser()->getId() !== $user->getId()) {
+            return $this->json(
+                ['message' => 'Cette invitation ne vous appartient pas.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        if ($invitation->getStatus() !== 'PENDING') {
+            return $this->json(
+                ['message' => 'Cette invitation a déjà été traitée.'],
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $invitation
+            ->setStatus('ACCEPTED')
+            ->setJoinedAt(new \DateTimeImmutable());
+
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Invitation acceptée.',
+            'status' => 'ACCEPTED',
+            'tripProjectId' => $invitation->getTripProject()->getId(),
+        ]);
+    }
+
+    #[Route(
+        '/api/invitations/{id}/decline',
+        name: 'api_invitation_decline',
+        methods: ['PATCH']
+    )]
+    public function declineInvitation(
+        int $id,
+        EntityManagerInterface $entityManager,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $invitation = $entityManager
+            ->getRepository(TripParticipant::class)
+            ->find($id);
+
+        if (!$invitation) {
+            return $this->json(
+                ['message' => 'Invitation introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        if ($invitation->getUser()->getId() !== $user->getId()) {
+            return $this->json(
+                ['message' => 'Cette invitation ne vous appartient pas.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        if ($invitation->getStatus() !== 'PENDING') {
+            return $this->json(
+                ['message' => 'Cette invitation a déjà été traitée.'],
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $invitation->setStatus('DECLINED');
+
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Invitation refusée.',
+            'status' => 'DECLINED',
         ]);
     }
 }

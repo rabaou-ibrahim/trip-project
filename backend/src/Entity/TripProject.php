@@ -42,6 +42,9 @@ class TripProject
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
+    #[ORM\Column(options: ['default' => false])]
+    private bool $participantsStepCompleted = false;
+
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
@@ -156,6 +159,18 @@ class TripProject
     public function setUpdatedAt(?\DateTimeImmutable $updatedAt): static
     {
         $this->updatedAt = $updatedAt;
+
+        return $this;
+    }
+
+    public function isParticipantsStepCompleted(): bool
+    {
+        return $this->participantsStepCompleted;
+    }
+
+    public function setParticipantsStepCompleted(bool $participantsStepCompleted): static
+    {
+        $this->participantsStepCompleted = $participantsStepCompleted;
 
         return $this;
     }

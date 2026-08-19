@@ -154,6 +154,7 @@ final class TripParticipantController extends AbstractController
                 'description' => $tripProject->getDescription(),
                 'role' => $invitation->getRole(),
                 'status' => $invitation->getStatus(),
+                'createdAt' => $invitation->getCreatedAt(),
             ];
         }
 

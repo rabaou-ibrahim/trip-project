@@ -94,7 +94,7 @@ export function DesktopTripCard({
             <View style={styles.heading}>
               {featured && (
                 <View style={styles.statusStamp}>
-                  <Text style={styles.statusStampText}>EN COURS</Text>
+                  <Text style={styles.statusStampText}>À POURSUIVRE</Text>
                 </View>
               )}
 

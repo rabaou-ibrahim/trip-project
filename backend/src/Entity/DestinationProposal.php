@@ -37,20 +37,66 @@ class DestinationProposal
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?TripProject $tripProject = null;
 
-    public function __construct() { $this->createdAt = new \DateTimeImmutable(); }
-    public function getId(): ?int { return $this->id; }
-    public function getCity(): ?string { return $this->city; }
-    public function setCity(string $city): static { $this->city = $city; return $this; }
-    public function getCountry(): ?string { return $this->country; }
-    public function setCountry(string $country): static { $this->country = $country; return $this; }
-    public function getDescription(): ?string { return $this->description; }
-    public function setDescription(?string $description): static { $this->description = $description; return $this; }
-    public function getEstimatedCost(): ?string { return $this->estimatedCost; }
-    public function setEstimatedCost(?string $estimatedCost): static { $this->estimatedCost = $estimatedCost; return $this; }
-    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
-    public function setCreatedAt(\DateTimeImmutable $createdAt): static { $this->createdAt = $createdAt; return $this; }
-    public function getProposedBy(): ?User { return $this->proposedBy; }
-    public function setProposedBy(User $proposedBy): static { $this->proposedBy = $proposedBy; return $this; }
-    public function getTripProject(): ?TripProject { return $this->tripProject; }
-    public function setTripProject(TripProject $tripProject): static { $this->tripProject = $tripProject; return $this; }
+    public function __construct() { 
+        $this->createdAt = new \DateTimeImmutable(); 
+    }
+
+    public function getId(): ?int { 
+        return $this->id; 
+    }
+
+    public function getCity(): ?string { 
+        return $this->city; 
+    }
+
+    public function setCity(string $city): static { 
+        $this->city = $city; return $this; 
+    }
+
+    public function getCountry(): ?string { 
+        return $this->country; 
+    }
+
+    public function setCountry(string $country): static { 
+        $this->country = $country; return $this;
+    }
+
+    public function getDescription(): ?string { 
+        return $this->description; 
+    }
+
+    public function setDescription(?string $description): static { 
+        $this->description = $description; return $this; 
+    }
+
+    public function getEstimatedCost(): ?string { 
+        return $this->estimatedCost; 
+    }
+    public function setEstimatedCost(?string $estimatedCost): static { 
+        $this->estimatedCost = $estimatedCost; return $this; 
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable { 
+        return $this->createdAt; 
+    }
+
+    public function setCreatedAt(\DateTimeImmutable $createdAt): static { 
+        $this->createdAt = $createdAt; return $this; 
+    }
+
+    public function getProposedBy(): ?User { 
+        return $this->proposedBy; 
+    }
+
+    public function setProposedBy(User $proposedBy): static { 
+        $this->proposedBy = $proposedBy; return $this; 
+    }
+
+    public function getTripProject(): ?TripProject { 
+        return $this->tripProject; 
+    }
+
+    public function setTripProject(TripProject $tripProject): static { 
+        $this->tripProject = $tripProject; return $this; 
+    }
 }

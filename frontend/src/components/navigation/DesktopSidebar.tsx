@@ -6,6 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 
 import { radius, spacing, typography } from '@/theme';
+import { usePendingInvitationCount } from '@/hooks/usePendingInvitationCount'
 
 type NavigationItemId =
   | 'home'
@@ -16,6 +17,7 @@ type NavigationItemId =
 
 type DesktopSidebarProps = {
   activeItem: NavigationItemId;
+  invitationCount?: number;
 };
 
 type NavigationItem = {
@@ -25,11 +27,6 @@ type NavigationItem = {
 };
 
 const navigationItems: NavigationItem[] = [
-  {
-    id: 'home',
-    label: 'Accueil',
-    icon: 'home-outline',
-  },
   {
     id: 'trips',
     label: 'Voyages',
@@ -56,6 +53,7 @@ export function DesktopSidebar({
   activeItem,
 }: DesktopSidebarProps) {
   const router = useRouter();
+  const invitationCount = usePendingInvitationCount();
 
   const { user, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
@@ -84,12 +82,25 @@ export function DesktopSidebar({
       router.push('/');
       return;
     }
+
+    if (item === 'trips') {
+      router.push('/');
+      return;
+    }
+
+    if (item === 'invitations') {
+      router.push('/invitations');
+      return;
+    }
+
     if (item === 'profile') {
       router.push('/profile');
       return;
     }
 
-    console.log(`Open desktop navigation: ${item}`);
+    if (item === 'settings') {
+      router.push('/settings');
+    }
   }
 
   return (
@@ -134,9 +145,11 @@ export function DesktopSidebar({
                   {item.label}
                 </Text>
 
-                {item.id === 'invitations' && (
+                {item.id === 'invitations' && invitationCount > 0 && (
                   <View style={styles.invitationBadge}>
-                    <Text style={styles.invitationBadgeText}>2</Text>
+                    <Text style={styles.invitationBadgeText}>
+                      {invitationCount}
+                    </Text>
                   </View>
                 )}
               </Pressable>
@@ -256,7 +269,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
 
-    backgroundColor: '#E98A00',
+    backgroundColor: 'red',
     borderWidth: 1,
     borderColor: '#FBBF24',
     borderRadius: radius.full,

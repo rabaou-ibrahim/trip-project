@@ -1,5 +1,15 @@
-import { getStoredToken } from '@/storage/authStorage';
+import { getStoredToken, removeStoredToken } from '@/storage/authStorage';
 import type { ApiErrorPayload } from '@/types/auth';
+
+type UnauthorizedHandler = () => void | Promise<void>;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(
+  handler: UnauthorizedHandler | null,
+): void {
+  unauthorizedHandler = handler;
+}
 
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -44,7 +54,7 @@ export async function apiRequest<T>(
     ...customHeaders,
   };
 
-  if (body !== undefined) {
+  if (body !== undefined && !(body instanceof FormData)) {
     headers['Content-Type'] = 'application/json';
   }
 
@@ -52,11 +62,31 @@ export async function apiRequest<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
+  const requestBody =
+    body instanceof FormData
+      ? body
+      : body === undefined
+        ? undefined
+        : JSON.stringify(body);
+
   const response = await fetch(`${API_URL}${path}`, {
     ...requestOptions,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: requestBody,
   });
+
+  if (response.status === 401 && authenticated) {
+    await removeStoredToken();
+
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+
+    throw new ApiError(
+      401,
+      'Votre session a expiré. Veuillez vous reconnecter.',
+    );
+  }
 
   const responseText = await response.text();
   let payload: unknown = null;
