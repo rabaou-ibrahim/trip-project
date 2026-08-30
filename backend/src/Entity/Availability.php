@@ -88,14 +88,4 @@ class Availability
     public function setTripProject(TripProject $tripProject): static { 
         $this->tripProject = $tripProject; return $this; 
     }
-
-    public function countDistinctUsersForProject(TripProject $tripProject): int
-    {
-        return (int) $this->createQueryBuilder('availability')
-            ->select('COUNT(DISTINCT IDENTITY(availability.user))')
-            ->andWhere('availability.tripProject = :tripProject')
-            ->setParameter('tripProject', $tripProject)
-            ->getQuery()
-            ->getSingleScalarResult();
-    }
 }

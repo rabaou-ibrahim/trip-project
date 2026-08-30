@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 
 import { useAuth } from '@/contexts/AuthContext';
 import { DesktopTripCard } from '@/components/home/DesktopTripCard';
@@ -92,9 +92,11 @@ export default function HomeScreen() {
     }
   }, [router, signOut]);
 
-  useEffect(() => {
+ useFocusEffect(
+  useCallback(() => {
     void loadTripProjects();
-  }, [loadTripProjects]);
+  }, [loadTripProjects]),
+);
 
   function handleCarouselScroll(
     event: NativeSyntheticEvent<NativeScrollEvent>,
@@ -253,7 +255,24 @@ export default function HomeScreen() {
                 </View>
               ) : (
                 <View style={styles.desktopTripsGrid}>
-                 
+                  {displayedTrips.map((trip) => (
+                    <View
+                      key={trip.id}
+                      style={styles.desktopTripCell}
+                    >
+                      <MobileCompactTripCard
+                        title={trip.title}
+                        startDate={trip.startDate}
+                        endDate={trip.endDate}
+                        selectedDestination={trip.selectedDestination}
+                        participantCount={trip.participantCount}
+                        participantsPreview={trip.participantsPreview}
+                        status={trip.status}
+                        isDesktop
+                        onPress={() => openTripProject(trip.id)}
+                      />
+                    </View>
+                  ))}
                 </View>
               )}
               </View>

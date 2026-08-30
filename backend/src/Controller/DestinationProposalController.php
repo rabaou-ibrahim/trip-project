@@ -6,6 +6,7 @@ use App\Entity\DestinationProposal;
 use App\Entity\TripParticipant;
 use App\Entity\TripProject;
 use App\Entity\User;
+use App\Entity\DestinationVote;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -176,23 +177,123 @@ final class DestinationProposalController extends AbstractController
 
         $result = [];
 
-        foreach ($proposals as $proposal) {
-            $proposedBy = $proposal->getProposedBy();
+        $currentVote = $entityManager
+    ->getRepository(DestinationVote::class)
+    ->findOneBy([
+        'user' => $user,
+        'tripProject' => $tripProject,
+    ]);
 
-            $result[] = [
-                'id' => $proposal->getId(),
-                'city' => $proposal->getCity(),
-                'country' => $proposal->getCountry(),
-                'description' => $proposal->getDescription(),
-                'estimatedCost' => $proposal->getEstimatedCost(),
-                'createdAt' => $proposal->getCreatedAt()?->format('Y-m-d H:i:s'),
-                'proposedBy' => [
-                    'id' => $proposedBy->getId(),
-                    'username' => $proposedBy->getUsername(),
-                ],
-            ];
-        }
+        foreach ($proposals as $proposal) {
+    $proposedBy = $proposal->getProposedBy();
+
+    $votes = $entityManager
+        ->getRepository(DestinationVote::class)
+        ->count([
+            'destinationProposal' => $proposal,
+        ]);
+
+    $result[] = [
+        'id' => $proposal->getId(),
+        'city' => $proposal->getCity(),
+        'country' => $proposal->getCountry(),
+        'description' => $proposal->getDescription(),
+        'estimatedCost' => $proposal->getEstimatedCost(),
+        'createdAt' => $proposal->getCreatedAt()?->format('Y-m-d H:i:s'),
+
+        'votes' => $votes,
+
+        'hasVoted' =>
+            $currentVote?->getDestinationProposal()?->getId()
+            === $proposal->getId(),
+
+        'proposedBy' => [
+            'id' => $proposedBy->getId(),
+            'username' => $proposedBy->getUsername(),
+        ],
+    ];
+}
 
         return $this->json($result);
+    }
+
+    #[Route(
+        '/api/trip-projects/{projectId}/destination-proposals/{proposalId}/vote',
+        name: 'api_destination_proposal_vote',
+        methods: ['PUT']
+    )]
+    public function vote(
+        int $projectId,
+        int $proposalId,
+        EntityManagerInterface $entityManager,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $tripProject = $entityManager
+            ->getRepository(TripProject::class)
+            ->find($projectId);
+
+        if (!$tripProject) {
+            return $this->json(
+                ['message' => 'Projet introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        $participation = $entityManager
+            ->getRepository(TripParticipant::class)
+            ->findOneBy([
+                'user' => $user,
+                'tripProject' => $tripProject,
+                'status' => 'ACCEPTED',
+            ]);
+
+        if (!$participation) {
+            return $this->json(
+                ['message' => 'Vous ne participez pas à ce projet.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $proposal = $entityManager
+            ->getRepository(DestinationProposal::class)
+            ->findOneBy([
+                'id' => $proposalId,
+                'tripProject' => $tripProject,
+            ]);
+
+        if (!$proposal) {
+            return $this->json(
+                ['message' => 'Destination introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        $vote = $entityManager
+            ->getRepository(DestinationVote::class)
+            ->findOneBy([
+                'user' => $user,
+                'tripProject' => $tripProject,
+            ]);
+
+        if (!$vote) {
+            $vote = new DestinationVote();
+
+            $vote
+                ->setUser($user)
+                ->setTripProject($tripProject);
+
+            $entityManager->persist($vote);
+        } else {
+            $vote->setUpdatedAt(new \DateTimeImmutable());
+        }
+
+        $vote->setDestinationProposal($proposal);
+
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Vote enregistré.',
+            'proposalId' => $proposal->getId(),
+        ]);
     }
 }

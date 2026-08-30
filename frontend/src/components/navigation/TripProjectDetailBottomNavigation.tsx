@@ -89,7 +89,7 @@ function NavItem({
     >
       <Ionicons
         name={icon}
-        size={19}
+        size={22}
         color={active ? colors.primary : colors.textSecondary}
       />
 
@@ -106,8 +106,8 @@ function NavItem({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    minHeight: 68,
+    container: {
+    minHeight: 72,
     paddingHorizontal: spacing.sm,
     paddingTop: 7,
     paddingBottom: 8,
@@ -116,11 +116,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     borderTopWidth: 1,
     borderTopColor: '#E5EBF2',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
 
   item: {
     flex: 1,
+    minWidth: 0,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
@@ -128,7 +130,7 @@ const styles = StyleSheet.create({
 
   label: {
     color: colors.textSecondary,
-    fontSize: 9,
+    fontSize: 9.5,
     fontFamily: typography.fontFamily.medium,
   },
 

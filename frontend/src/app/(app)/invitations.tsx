@@ -22,6 +22,7 @@ import { colors, radius, spacing, typography } from '@/theme';
 import { useRouter } from 'expo-router'
 import { useAuth } from '@/contexts/AuthContext';
 import { MobileAppHeader } from '@/components/navigation/MobileAppHeader';
+import { DesktopPageHeader } from '@/components/navigation/DesktopPageHeader';
 
 export default function InvitationsScreen() {
   const { width } = useWindowDimensions();
@@ -78,41 +79,33 @@ export default function InvitationsScreen() {
 
   const content = (
     <View style={styles.content}>
-      {!isDesktop && (
-        <MobileAppHeader
+        {isDesktop ? (
+          <DesktopPageHeader
+            title="Invitations"
+            subtitle="Retrouvez les voyages auxquels vous avez été invité."
             avatarLabel={(user?.firstname || user?.username || 'U')
-            .charAt(0)
-            .toUpperCase()}
-            onMenuPress={() => console.log('Ouvrir le menu')}
-            onSearchPress={() => console.log('Rechercher')}
-            onProfilePress={() => router.push('/profile')}
-        />
+              .charAt(0)
+              .toUpperCase()}
+          />
+        ) : (
+          <>
+            <MobileAppHeader
+              avatarLabel={(user?.firstname || user?.username || 'U')
+                .charAt(0)
+                .toUpperCase()}
+              onMenuPress={() => console.log('Ouvrir le menu')}
+              onSearchPress={() => console.log('Rechercher')}
+              onProfilePress={() => router.push('/profile')}
+            />
+
+            <View style={styles.mobilePageHeading}>
+              <Text style={styles.mobileTitle}>Invitations</Text>
+              <Text style={styles.mobileSubtitle}>
+                Retrouvez les voyages auxquels vous avez été invité.
+              </Text>
+            </View>
+          </>
         )}
-
-        <View
-        style={[
-            styles.pageHeading,
-            !isDesktop && styles.mobilePageHeading,
-        ]}
-        >
-        <Text
-            style={[
-            styles.title,
-            !isDesktop && styles.mobileTitle,
-            ]}
-        >
-            Invitations
-        </Text>
-
-        <Text
-            style={[
-            styles.subtitle,
-            !isDesktop && styles.mobileSubtitle,
-            ]}
-        >
-            Retrouvez les voyages auxquels vous avez été invité.
-        </Text>
-        </View>
 
       {isLoading ? (
         <View style={styles.stateCard}>
@@ -278,11 +271,11 @@ const styles = StyleSheet.create({
     },
 
     title: {
-    color: '#1A1C23',
-    fontSize: 34,
-    lineHeight: 40,
-    fontFamily: typography.fontFamily.displayBold,
-    letterSpacing: -0.7,
+      color: '#1A1C23',
+      fontSize: 36,
+      lineHeight: 42,
+      fontFamily: typography.fontFamily.displayBold,
+      letterSpacing: -0.8,
     },
 
     mobileTitle: {
@@ -294,11 +287,11 @@ const styles = StyleSheet.create({
     },
 
     subtitle: {
-    marginTop: 4,
-    color: colors.textSecondary,
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: typography.fontFamily.regular,
+      marginTop: 3,
+      color: '#64748B',
+      fontSize: 16,
+      lineHeight: 23,
+      fontFamily: typography.fontFamily.regular,
     },
 
     mobileSubtitle: {
@@ -316,11 +309,11 @@ const styles = StyleSheet.create({
   desktopContent: {
     flexGrow: 1,
     width: '100%',
-    maxWidth: 1180,
+    maxWidth: 1360,
     alignSelf: 'center',
-    paddingHorizontal: 36,
-    paddingTop: 42,
-    paddingBottom: 60,
+    paddingHorizontal: 44,
+    paddingTop: 36,
+    paddingBottom: 56,
   },
 
   list: {

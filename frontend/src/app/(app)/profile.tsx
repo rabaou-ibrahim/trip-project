@@ -29,6 +29,7 @@ import {
   getAvatarUrl,
 } from '@/services/userService';
 import { ApiError } from '@/services/apiClient';
+import { DesktopPageHeader } from '@/components/navigation/DesktopPageHeader';
 
 export default function ProfileScreen() {
   const { width } = useWindowDimensions();
@@ -184,147 +185,156 @@ export default function ProfileScreen() {
                   !isDesktop && styles.mobileHeading,
                 ]}
               >
-                <Text
-                  style={isDesktop ? styles.title : styles.mobileTitle}
+                <View
+                  style={[
+                    styles.heading,
+                    !isDesktop && styles.mobileHeading,
+                  ]}
                 >
-                  Mon profil
-                </Text>
+                  <Text
+                    style={isDesktop ? styles.title : styles.mobileTitle}
+                  >
+                    Mon profil
+                  </Text>
 
-                <Text
-                  style={isDesktop ? styles.subtitle : styles.mobileSubtitle}
-                >
-                  Retrouvez les informations associées à votre compte.
-                </Text>
+                  <Text
+                    style={isDesktop ? styles.subtitle : styles.mobileSubtitle}
+                  >
+                    Retrouvez les informations associées à votre compte.
+                  </Text>
+                </View>
               </View>
 
-              <Card>
-                <View style={styles.cardContent}>
-                  <View style={styles.identity}>
-                    <Pressable
-                      onPress={() => void handlePickAvatar()}
-                      style={({ pressed }) => [
-                        styles.avatarContainer,
-                        pressed && { opacity: 0.8 },
-                      ]}
-                    >
-                      {avatarUri ? (
-                        <Image
-                          source={{ uri: avatarUri }}
-                          style={styles.avatar}
-                        />
-                      ) : (
-                        <View style={styles.avatar}>
-                          <Text style={styles.avatarText}>
-                            {avatarInitial}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.avatarEditButton}>
-                        <Ionicons
-                          name="camera"
-                          size={14}
-                          color="#FFFFFF"
-                        />
-                      </View>
-                    </Pressable>
-
-                    <View style={styles.identityText}>
-                      <Text style={styles.fullName}>
-                        {fullName}
-                      </Text>
-
-                      <Text style={styles.username}>
-                        @{user?.username}
-                      </Text>
-
+              <View style={styles.profileCardContainer}>
+                <Card>
+                  <View style={styles.cardContent}>
+                    <View style={styles.identity}>
                       <Pressable
                         onPress={() => void handlePickAvatar()}
+                        style={({ pressed }) => [
+                          styles.avatarContainer,
+                          pressed && { opacity: 0.8 },
+                        ]}
                       >
-                        <Text style={styles.changeAvatarText}>
-                          Modifier la photo
-                        </Text>
+                        {avatarUri ? (
+                          <Image
+                            source={{ uri: avatarUri }}
+                            style={styles.avatar}
+                          />
+                        ) : (
+                          <View style={styles.avatar}>
+                            <Text style={styles.avatarText}>
+                              {avatarInitial}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.avatarEditButton}>
+                          <Ionicons
+                            name="camera"
+                            size={14}
+                            color="#FFFFFF"
+                          />
+                        </View>
                       </Pressable>
+
+                      <View style={styles.identityText}>
+                        <Text style={styles.fullName}>
+                          {fullName}
+                        </Text>
+
+                        <Text style={styles.username}>
+                          @{user?.username}
+                        </Text>
+
+                        <Pressable
+                          onPress={() => void handlePickAvatar()}
+                        >
+                          <Text style={styles.changeAvatarText}>
+                            Modifier la photo
+                          </Text>
+                        </Pressable>
+                      </View>
                     </View>
+
+                    <View style={styles.separator} />
+
+                    <View style={styles.form}>
+                      <View style={styles.formRow}>
+                        <View style={styles.formColumn}>
+                          <Text style={styles.fieldLabel}>Prénom</Text>
+                          <TextInput
+                            value={firstname}
+                            onChangeText={setFirstname}
+                            style={styles.input}
+                          />
+                        </View>
+
+                        <View style={styles.formColumn}>
+                          <Text style={styles.fieldLabel}>Nom</Text>
+                          <TextInput
+                            value={lastname}
+                            onChangeText={setLastname}
+                            style={styles.input}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.formRow}>
+                        <View style={styles.formColumn}>
+                          <Text style={styles.fieldLabel}>Nom d’utilisateur</Text>
+                          <TextInput
+                            value={username}
+                            onChangeText={setUsername}
+                            autoCapitalize="none"
+                            style={styles.input}
+                          />
+                        </View>
+
+                        <View style={styles.formColumn}>
+                          <Text style={styles.fieldLabel}>Téléphone</Text>
+                          <TextInput
+                            value={phoneNumber}
+                            onChangeText={setPhoneNumber}
+                            keyboardType="phone-pad"
+                            style={styles.input}
+                          />
+                        </View>
+                      </View>
+
+                      <View style={styles.field}>
+                        <Text style={styles.fieldLabel}>Date de naissance</Text>
+                        <DateField
+                          value={birthdate}
+                          label=""
+                          onChange={setBirthdate}
+                        />
+                      </View>
+                    </View>
+
+                    {profileError && (
+                      <Text style={styles.errorText}>
+                        {profileError}
+                      </Text>
+                    )}
+
+                    {profileSuccess && (
+                      <Text style={styles.successText}>
+                        {profileSuccess}
+                      </Text>
+                    )}
+
+                    <Button
+                      label={
+                        isSaving
+                          ? 'Enregistrement…'
+                          : 'Enregistrer'
+                      }
+                      onPress={() => void handleSaveProfile()}
+                      disabled={isSaving}
+                    />
                   </View>
-
-                  <View style={styles.separator} />
-
-                  <View style={styles.form}>
-                    <View style={styles.formRow}>
-                      <View style={styles.formColumn}>
-                        <Text style={styles.fieldLabel}>Prénom</Text>
-                        <TextInput
-                          value={firstname}
-                          onChangeText={setFirstname}
-                          style={styles.input}
-                        />
-                      </View>
-
-                      <View style={styles.formColumn}>
-                        <Text style={styles.fieldLabel}>Nom</Text>
-                        <TextInput
-                          value={lastname}
-                          onChangeText={setLastname}
-                          style={styles.input}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={styles.formColumn}>
-                        <Text style={styles.fieldLabel}>Nom d’utilisateur</Text>
-                        <TextInput
-                          value={username}
-                          onChangeText={setUsername}
-                          autoCapitalize="none"
-                          style={styles.input}
-                        />
-                      </View>
-
-                      <View style={styles.formColumn}>
-                        <Text style={styles.fieldLabel}>Téléphone</Text>
-                        <TextInput
-                          value={phoneNumber}
-                          onChangeText={setPhoneNumber}
-                          keyboardType="phone-pad"
-                          style={styles.input}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.field}>
-                      <Text style={styles.fieldLabel}>Date de naissance</Text>
-                      <DateField
-                        value={birthdate}
-                        label=""
-                        onChange={setBirthdate}
-                      />
-                    </View>
-                  </View>
-
-                  {profileError && (
-                    <Text style={styles.errorText}>
-                      {profileError}
-                    </Text>
-                  )}
-
-                  {profileSuccess && (
-                    <Text style={styles.successText}>
-                      {profileSuccess}
-                    </Text>
-                  )}
-
-                  <Button
-                    label={
-                      isSaving
-                        ? 'Enregistrement…'
-                        : 'Enregistrer'
-                    }
-                    onPress={() => void handleSaveProfile()}
-                    disabled={isSaving}
-                  />
-                </View>
-              </Card>
+                </Card>
+              </View>
             </View>
           </ScrollView>
 
@@ -404,6 +414,11 @@ const styles = StyleSheet.create({
     paddingBottom: 88,
   },
 
+  profileCardContainer: {
+    width: '100%',
+    maxWidth: 1040,
+  },
+
   heading: {
     marginBottom: 22,
   },
@@ -414,10 +429,10 @@ const styles = StyleSheet.create({
 
   title: {
     color: '#1A1C23',
-    fontSize: 34,
-    lineHeight: 40,
+    fontSize: 36,
+    lineHeight: 42,
     fontFamily: typography.fontFamily.displayBold,
-    letterSpacing: -0.7,
+    letterSpacing: -0.8,
   },
 
   mobileTitle: {
@@ -452,12 +467,16 @@ const styles = StyleSheet.create({
   },
 
   desktopScrollContent: {
-    padding: spacing.xxxl,
+    width: '100%',
+    maxWidth: 1360,
+    alignSelf: 'center',
+    paddingHorizontal: 44,
+    paddingTop: 36,
+    paddingBottom: 56,
   },
+
   content: {
     width: '100%',
-    maxWidth: 680,
-    alignSelf: 'center',
   },
 
   identity: {

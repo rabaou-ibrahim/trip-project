@@ -8,12 +8,14 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  Alert,
 } from 'react-native';
 import { useEffect, useState } from 'react';
 import {
   completeParticipantsStep,
   getTripProject,
-  inviteTripParticipant
+  inviteTripParticipant,
+  removeTripParticipant
 } from '@/services/tripProjectService';
 import { ApiError } from '@/services/apiClient';
 import type { TripProjectDetail, TripProjectPendingInvitation } from '@/types/tripProject';
@@ -52,7 +54,11 @@ export default function TripProjectParticipantsScreen() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  
+  const [removingParticipantId, setRemovingParticipantId] =
+  useState<number | null>(null);
+
+  const [participantError, setParticipantError] =
+    useState<string | null>(null);
   const members: Member[] =
   project?.participantsPreview.map((participant) => {
     const name =
@@ -87,6 +93,7 @@ export default function TripProjectParticipantsScreen() {
     email: invitation.email,
     sentAt: formatInvitationDate(invitation.createdAt),
   })) ?? [];
+
 
   const [isCompletingStep, setIsCompletingStep] = useState(false);
   const [stepError, setStepError] = useState<string | null>(null);
@@ -178,6 +185,41 @@ export default function TripProjectParticipantsScreen() {
     }
   };
 
+  const handleRemoveParticipant = async (
+    participantId: number,
+  ) => {
+    if (
+      !id ||
+      !/^\d+$/.test(id) ||
+      removingParticipantId !== null
+    ) {
+      return;
+    }
+
+    try {
+      setRemovingParticipantId(participantId);
+      setParticipantError(null);
+
+      await removeTripParticipant(
+        Number(id),
+        participantId,
+      );
+
+      const refreshedProject = await getTripProject(Number(id));
+      setProject(refreshedProject);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setParticipantError(error.message);
+      } else {
+        setParticipantError(
+          'Impossible de retirer ce participant.',
+        );
+      }
+    } finally {
+      setRemovingParticipantId(null);
+    }
+  };
+
   function formatInvitationDate(createdAt: string): string {
     const createdDate = new Date(createdAt);
     const now = new Date();
@@ -250,95 +292,123 @@ export default function TripProjectParticipantsScreen() {
           </Text>
         </View>
 
-        <Pressable
-          onPress={() => {
-            setInviteError(null);
-            setIsInviteModalOpen(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Inviter un participant"
-          style={({ pressed }) => [
-            styles.inviteButton,
-            !isDesktop && styles.mobileInviteButton,
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.inviteButtonText}>Nouvelle invitation</Text>
-        </Pressable>
+        {project?.role === 'OWNER' && !project.participantsStepCompleted && (
+          <Pressable
+            onPress={() => {
+              setInviteError(null);
+              setIsInviteModalOpen(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Inviter un participant"
+            style={({ pressed }) => [
+              styles.inviteButton,
+              !isDesktop && styles.mobileInviteButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.inviteButtonText}>Nouvelle invitation</Text>
+          </Pressable>
+        )}
       </View>
 
       <View style={[styles.stats, !isDesktop && styles.mobileStats]}>
-  <Stat
-    icon="people-outline"
-    value={`${members.length}`}
-    label="participants"
-    tone="blue"
-  />
+        <Stat
+          icon="people-outline"
+          value={`${members.length}`}
+          label="participants"
+          tone="blue"
+        />
 
-  <View
-      style={[
-        styles.statDivider,
-        !isDesktop && styles.mobileStatDivider,
-      ]}
-    />
+        <View
+            style={[
+              styles.statDivider,
+              !isDesktop && styles.mobileStatDivider,
+            ]}
+          />
 
-    <Stat
-      icon="shield-checkmark-outline"
-      value={`${members.filter(
-        (member) => member.role === 'Propriétaire'
-      ).length}`}
-      label="propriétaire"
-      tone="green"
-    />
+          <Stat
+            icon="shield-checkmark-outline"
+            value={`${members.filter(
+              (member) => member.role === 'Propriétaire'
+            ).length}`}
+            label="propriétaire"
+            tone="green"
+          />
 
-    <View
-      style={[
-        styles.statDivider,
-        !isDesktop && styles.mobileStatDivider,
-      ]}
-    />
-
-    <Stat
-      icon="mail-unread-outline"
-      value={`${invitations.length}`}
-      label="en attente"
-      tone="orange"
-    />
-  </View>
-
-      <View style={[styles.mainGrid, !isDesktop && styles.mobileMainGrid]}>
-        <View style={styles.membersCard}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <Text style={styles.sectionTitle}>Membres du voyage</Text>
-              <Text style={styles.sectionSubtitle}>
-                Les personnes qui participent déjà au projet
-              </Text>
-            </View>
-            <View style={styles.countPill}>
-              <Text style={styles.countPillText}>{members.length}</Text>
-            </View>
-          </View>
-
-          <View style={styles.memberList}>
-            {members.map((member, index) => (
-              <MemberRow
-                key={member.id}
-                member={member}
-                isLast={index === members.length - 1}
+          {invitations.length > 0 && (
+            <>
+              <View
+                style={[
+                  styles.statDivider,
+                  !isDesktop && styles.mobileStatDivider,
+                ]}
               />
-            ))}
-          </View>
+
+              <Stat
+                icon="mail-unread-outline"
+                value={`${invitations.length}`}
+                label="en attente"
+                tone="orange"
+              />
+            </>
+          )}
         </View>
 
+            <View style={[styles.mainGrid, !isDesktop && styles.mobileMainGrid]}>
+              <View style={styles.membersCard}>
+                <View style={styles.sectionHeader}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Membres du voyage</Text>
+                    <Text style={styles.sectionSubtitle}>
+                      Les personnes qui participent déjà au projet
+                    </Text>
+                  </View>
+                  <View style={styles.countPill}>
+                    <Text style={styles.countPillText}>{members.length}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.memberList}>
+                  {members.map((member, index) => (
+                    <MemberRow
+                      key={member.id}
+                      member={member}
+                      isLast={index === members.length - 1}
+                      canRemove={
+                        project?.role === 'OWNER' &&
+                        member.role !== 'Propriétaire'
+                      }
+                      removing={removingParticipantId === member.id}
+                      onRemove={() =>
+                        void handleRemoveParticipant(member.id)
+                      }
+                    />
+                  ))}
+                </View>
+                {participantError && (
+                  <Text style={styles.participantError}>
+                    {participantError}
+                  </Text>
+                )}
+              </View>
+
+            {invitations.length > 0 && (
         <View style={styles.invitationsCard}>
           <View style={styles.invitationHeading}>
             <View style={styles.invitationIcon}>
-              <Ionicons name="paper-plane-outline" size={19} color={colors.primary} />
+              <Ionicons
+                name="paper-plane-outline"
+                size={19}
+                color={colors.primary}
+              />
             </View>
+
             <View style={styles.invitationHeadingText}>
-              <Text style={styles.sectionTitle}>Invitations en attente</Text>
+              <Text style={styles.sectionTitle}>
+                Invitations en attente
+              </Text>
+
               <Text style={styles.sectionSubtitle}>
                 Elles pourront rejoindre le voyage depuis leur invitation.
               </Text>
@@ -347,10 +417,14 @@ export default function TripProjectParticipantsScreen() {
 
           <View style={styles.invitationList}>
             {invitations.map((invitation) => (
-              <InvitationRow key={invitation.id} invitation={invitation} />
+              <InvitationRow
+                key={invitation.id}
+                invitation={invitation}
+              />
             ))}
           </View>
         </View>
+      )}
       </View>
 
       {project?.role === 'OWNER' && (
@@ -576,7 +650,19 @@ function Stat({ icon, value, label, tone }: StatProps) {
   );
 }
 
-function MemberRow({ member, isLast }: { member: Member; isLast: boolean }) {
+function MemberRow({
+  member,
+  isLast,
+  canRemove,
+  removing,
+  onRemove,
+}: {
+  member: Member;
+  isLast: boolean;
+  canRemove: boolean;
+  removing: boolean;
+  onRemove: () => void;
+}) {
   return (
     <View style={[styles.memberRow, !isLast && styles.rowBorder]}>
       <View style={[styles.avatar, { backgroundColor: member.color }]}>
@@ -593,14 +679,41 @@ function MemberRow({ member, isLast }: { member: Member; isLast: boolean }) {
         <Text style={styles.memberRole}>{member.role}</Text>
       </View>
 
-      <Pressable
-        onPress={() => console.log(`Options de ${member.name}`)}
-        accessibilityRole="button"
-        accessibilityLabel={`Options de ${member.name}`}
-        style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}
-      >
-        <Ionicons name="ellipsis-horizontal" size={19} color={colors.textMuted} />
-      </Pressable>
+      {canRemove && (
+        <Pressable
+          onPress={() => {
+            Alert.alert(
+              'Retirer ce participant ?',
+              `${member.name} sera retiré du voyage et ses disponibilités seront supprimées.`,
+              [
+                {
+                  text: 'Annuler',
+                  style: 'cancel',
+                },
+                {
+                  text: 'Retirer',
+                  style: 'destructive',
+                  onPress: onRemove,
+                },
+              ],
+            );
+          }}
+          disabled={removing}
+          accessibilityRole="button"
+          accessibilityLabel={`Retirer ${member.name} du voyage`}
+          style={({ pressed }) => [
+            styles.removeMemberButton,
+            pressed && styles.pressed,
+            removing && styles.disabledButton,
+          ]}
+        >
+          <Ionicons
+            name="person-remove-outline"
+            size={18}
+            color={colors.error}
+          />
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -663,6 +776,13 @@ const styles = StyleSheet.create({
 
   desktopScroll: { 
     flex: 1 
+  },
+
+  participantError: {
+    marginTop: spacing.md,
+    color: colors.error,
+    fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily.medium,
   },
 
   sectionTitle: {
@@ -910,9 +1030,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.xxl,
+    paddingBottom: 160,
   },
-
   backButton: {
     alignSelf: 'flex-start',
     minHeight: 40,
@@ -1003,6 +1122,17 @@ const styles = StyleSheet.create({
     gap: 7,
     backgroundColor: colors.primary,
     borderRadius: 12,
+  },
+
+  removeMemberButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: `${colors.error}30`,
+    backgroundColor: `${colors.error}08`,
+    borderRadius: radius.full,
   },
 
   inviteButtonText: {
@@ -1247,6 +1377,7 @@ statDivider: {
   },
   completeStepCard: {
     marginTop: spacing.lg,
+    marginBottom: spacing.xl,
     padding: spacing.lg,
     gap: spacing.md,
     borderWidth: 1,

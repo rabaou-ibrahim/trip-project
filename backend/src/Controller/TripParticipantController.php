@@ -321,4 +321,84 @@ final class TripParticipantController extends AbstractController
 
         return $this->json($result);
     }
+
+    #[Route(
+        '/api/trip-projects/{projectId}/participants/{participantId}',
+        name: 'api_trip_participant_delete',
+        methods: ['DELETE']
+    )]
+    public function delete(
+        int $projectId,
+        int $participantId,
+        EntityManagerInterface $entityManager,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $tripProject = $entityManager
+            ->getRepository(TripProject::class)
+            ->find($projectId);
+
+        if (!$tripProject) {
+            return $this->json(
+                ['message' => 'Projet introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        $currentParticipation = $entityManager
+            ->getRepository(TripParticipant::class)
+            ->findOneBy([
+                'user' => $user,
+                'tripProject' => $tripProject,
+            ]);
+
+        if (
+            !$currentParticipation ||
+            $currentParticipation->getRole() !== 'OWNER' ||
+            $currentParticipation->getStatus() !== 'ACCEPTED'
+        ) {
+            return $this->json(
+                ['message' => 'Seul le propriétaire peut retirer un participant.'],
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $participant = $entityManager
+            ->getRepository(TripParticipant::class)
+            ->findOneBy([
+                'id' => $participantId,
+                'tripProject' => $tripProject,
+            ]);
+
+        if (!$participant) {
+            return $this->json(
+                ['message' => 'Participant introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        if ($participant->getRole() === 'OWNER') {
+            return $this->json(
+                ['message' => 'Le propriétaire ne peut pas être retiré du voyage.'],
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $availabilities = $entityManager
+            ->getRepository(\App\Entity\Availability::class)
+            ->findBy([
+                'user' => $participant->getUser(),
+                'tripProject' => $tripProject,
+            ]);
+
+        foreach ($availabilities as $availability) {
+            $entityManager->remove($availability);
+        }
+
+        $entityManager->remove($participant);
+        $entityManager->flush();
+
+        return $this->json([
+            'message' => 'Participant retiré du voyage.',
+        ]);
+    }
 }

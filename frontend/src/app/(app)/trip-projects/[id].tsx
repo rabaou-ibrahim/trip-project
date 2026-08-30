@@ -26,6 +26,12 @@ import { ApiError } from '@/services/apiClient';
 import { getTripProject } from '@/services/tripProjectService';
 import { colors, radius, spacing, typography } from '@/theme';
 import type { TripProjectDetail } from '@/types/tripProject';
+import { Modal } from 'react-native';
+import { TripProjectFormModal } from '@/components/trip-project/TripProjectFormModal';
+import {
+  deleteTripProject,
+  updateTripProject,
+} from '@/services/tripProjectService';
 
 export default function TripProjectDetailScreen() {
   const router = useRouter();
@@ -35,10 +41,13 @@ export default function TripProjectDetailScreen() {
   const [tripProject, setTripProject] = useState<TripProjectDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const isDesktop = width >= 1024;
   const rawId = Array.isArray(id) ? id[0] : id;
   const projectId = rawId && /^\d+$/.test(rawId) ? Number(rawId) : null;
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadTripProject = useCallback(async () => {
     if (projectId === null || projectId <= 0) {
@@ -217,6 +226,24 @@ export default function TripProjectDetailScreen() {
                 ]}
               />
             </View>
+
+            <ProgressAnnouncement
+              participantsDone={participantsDone}
+              availabilitiesDone={availabilitiesDone}
+              onPress={() => {
+                if (!participantsDone) {
+                  router.push(`/trip-projects/${tripProject.id}/participants`);
+                  return;
+                }
+
+                if (!availabilitiesDone) {
+                  router.push(`/trip-projects/${tripProject.id}/availabilities`);
+                  return;
+                }
+
+                router.push(`/trip-projects/${tripProject.id}/availabilities`);
+              }}
+            />
 
             <View style={styles.desktopStepsList}>
               <DesktopProjectStep
@@ -434,6 +461,8 @@ export default function TripProjectDetailScreen() {
       onDestinationsPress={() =>
         router.push(`/trip-projects/${tripProject.id}/destinations`)
       }
+      onMenuPress={() => setIsProjectMenuOpen(true)
+      }
     />
   );
 
@@ -478,8 +507,135 @@ export default function TripProjectDetailScreen() {
         activeItem="overview"
       />
     )}
+    {tripProject && (
+  <>
+    <Modal
+      visible={isProjectMenuOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setIsProjectMenuOpen(false)}
+    >
+      <Pressable
+        style={styles.menuOverlay}
+        onPress={() => setIsProjectMenuOpen(false)}
+      >
+        <View style={styles.projectMenu}>
+          <Pressable
+            style={styles.projectMenuItem}
+            onPress={() => {
+              setIsProjectMenuOpen(false);
+              setIsEditModalOpen(true);
+            }}
+          >
+            <Ionicons name="create-outline" size={19} color={colors.textPrimary} />
+            <Text style={styles.projectMenuText}>
+              Modifier le voyage
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.projectMenuItem}
+            onPress={() => {
+              setIsProjectMenuOpen(false);
+              // upload image juste après
+            }}
+          >
+            <Ionicons name="image-outline" size={19} color={colors.textPrimary} />
+            <Text style={styles.projectMenuText}>
+              Changer l’image
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.projectMenuItem}
+            onPress={async () => {
+              setIsProjectMenuOpen(false);
+
+              await updateTripProject(tripProject.id, {
+                status: 'completed',
+              });
+
+              await loadTripProject();
+            }}
+          >
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={19}
+              color={colors.textPrimary}
+            />
+            <Text style={styles.projectMenuText}>
+              Marquer comme terminé
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.projectMenuItem}
+            disabled={isDeleting}
+            onPress={async () => {
+              setIsDeleting(true);
+
+              try {
+                await deleteTripProject(tripProject.id);
+                setIsProjectMenuOpen(false);
+                router.replace('/');
+              } finally {
+                setIsDeleting(false);
+              }
+            }}
+          >
+            <Ionicons name="trash-outline" size={19} color={colors.error} />
+            <Text style={styles.projectMenuDeleteText}>
+              Supprimer le voyage
+            </Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+
+    <TripProjectFormModal
+      visible={isEditModalOpen}
+      mode="edit"
+      project={tripProject}
+      onClose={() => setIsEditModalOpen(false)}
+      onSuccess={async () => {
+        setIsEditModalOpen(false);
+        await loadTripProject();
+      }}
+    />
+  </>
+)}
     </View>
   );
+}
+
+function getProgressAnnouncement(
+  participantsDone: boolean,
+  availabilitiesDone: boolean,
+) {
+  if (availabilitiesDone) {
+    return {
+      icon: 'git-compare-outline' as const,
+      title: 'Disponibilités terminées',
+      message:
+        'Les disponibilités sont renseignées. Consultez maintenant les périodes communes.',
+    };
+  }
+
+  if (participantsDone) {
+    return {
+      icon: 'calendar-outline' as const,
+      title: 'Participants ajoutés',
+      message:
+        'Le groupe est prêt. Chaque participant peut maintenant renseigner ses disponibilités.',
+    };
+  }
+
+  return {
+    icon: 'people-outline' as const,
+    title: 'Constituez votre groupe',
+    message:
+      'Ajoutez les participants au voyage avant de passer aux disponibilités.',
+  };
 }
 
 type MobileTripProjectDetailProps = {
@@ -488,6 +644,7 @@ type MobileTripProjectDetailProps = {
   onParticipantsPress: () => void;
   onAvailabilitiesPress: () => void;
   onDestinationsPress: () => void;
+  onMenuPress: () => void;
 };
 
 function MobileTripProjectDetail({
@@ -496,6 +653,7 @@ function MobileTripProjectDetail({
   onParticipantsPress,
   onAvailabilitiesPress,
   onDestinationsPress,
+  onMenuPress,
 }: MobileTripProjectDetailProps) {
   const destination = project.selectedDestination
     ? `${project.selectedDestination.city}, ${project.selectedDestination.country}`
@@ -512,6 +670,11 @@ function MobileTripProjectDetail({
     (completedSteps / 7) * 100,
   );
 
+  const announcement = getProgressAnnouncement(
+    participantsDone,
+    availabilitiesDone,
+  );
+
   return (
     <View style={styles.mobileDetail}>
       <View style={styles.mobileHero}>
@@ -525,6 +688,7 @@ function MobileTripProjectDetail({
           </Pressable>
 
           <Pressable
+            onPress={onMenuPress}
             accessibilityRole="button"
             style={styles.mobileHeroButton}
           >
@@ -642,6 +806,26 @@ function MobileTripProjectDetail({
           </View>
         </View>
 
+        <View style={styles.progressAnnouncement}>
+          <View style={styles.progressAnnouncementIcon}>
+            <Ionicons
+              name={announcement.icon}
+              size={20}
+              color={colors.primary}
+            />
+          </View>
+
+          <View style={styles.progressAnnouncementContent}>
+            <Text style={styles.progressAnnouncementTitle}>
+              {announcement.title}
+            </Text>
+
+            <Text style={styles.progressAnnouncementText}>
+              {announcement.message}
+            </Text>
+          </View>
+        </View>
+
         <View style={styles.mobileSteps}>
           <MobileProjectStep
             icon="people-outline"
@@ -707,6 +891,56 @@ function MobileTripProjectDetail({
         </View>
       </View>
     </View>
+  );
+}
+
+function ProgressAnnouncement({
+  participantsDone,
+  availabilitiesDone,
+  onPress,
+}: {
+  participantsDone: boolean;
+  availabilitiesDone: boolean;
+  onPress: () => void;
+}) {
+  const announcement = getProgressAnnouncement(
+    participantsDone,
+    availabilitiesDone,
+  );
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.progressAnnouncement,
+        pressed && styles.buttonPressed,
+      ]}
+    >
+      <View style={styles.progressAnnouncementIcon}>
+        <Ionicons
+          name={announcement.icon}
+          size={20}
+          color={colors.primary}
+        />
+      </View>
+
+      <View style={styles.progressAnnouncementContent}>
+        <Text style={styles.progressAnnouncementTitle}>
+          {announcement.title}
+        </Text>
+
+        <Text style={styles.progressAnnouncementText}>
+          {announcement.message}
+        </Text>
+      </View>
+
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={colors.textMuted}
+      />
+    </Pressable>
   );
 }
 
@@ -1129,6 +1363,44 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  menuOverlay: {
+  flex: 1,
+  justifyContent: 'flex-start',
+  alignItems: 'flex-end',
+  paddingTop: 64,
+  paddingRight: 16,
+  backgroundColor: 'rgba(15, 23, 42, 0.15)',
+},
+
+projectMenu: {
+  width: 230,
+  paddingVertical: 8,
+  borderRadius: 14,
+  backgroundColor: '#FFFFFF',
+  borderWidth: 1,
+  borderColor: '#E3EAF2',
+},
+
+projectMenuItem: {
+  minHeight: 46,
+  paddingHorizontal: 14,
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 10,
+},
+
+projectMenuText: {
+  color: colors.textPrimary,
+  fontSize: 13,
+  fontFamily: typography.fontFamily.medium,
+},
+
+projectMenuDeleteText: {
+  color: colors.error,
+  fontSize: 13,
+  fontFamily: typography.fontFamily.medium,
+},
+
   desktopContentInner: {
     width: '100%',
     maxWidth: 1360,
@@ -1368,6 +1640,45 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: '#00BFA6',
   },
+
+  progressAnnouncement: {
+  padding: 13,
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 11,
+  borderWidth: 1,
+  borderColor: '#CFE5FA',
+  borderRadius: 14,
+  backgroundColor: '#F2F8FE',
+},
+
+progressAnnouncementIcon: {
+  width: 38,
+  height: 38,
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 11,
+  backgroundColor: '#FFFFFF',
+},
+
+progressAnnouncementContent: {
+  flex: 1,
+  minWidth: 0,
+},
+
+progressAnnouncementTitle: {
+  color: colors.textPrimary,
+  fontSize: 12,
+  fontFamily: typography.fontFamily.semibold,
+},
+
+progressAnnouncementText: {
+  marginTop: 3,
+  color: colors.textSecondary,
+  fontSize: 10,
+  lineHeight: 15,
+  fontFamily: typography.fontFamily.regular,
+},
 
   mobileSteps: {
     overflow: 'hidden',

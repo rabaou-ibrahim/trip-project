@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { colors, radius, spacing, typography } from '@/theme';
@@ -7,7 +7,8 @@ export type DestinationProposal = {
   id: string;
   city: string;
   country: string;
-  flag: string;
+  imageUrl?: string;
+  flagUrl?: string;
   estimatedBudget: number;
   votes: number;
   hasVoted: boolean;
@@ -35,45 +36,60 @@ export function DestinationProposalCard({
   return (
   <View style={[styles.card, isDesktop && styles.desktopCard]}>
     <View
-      style={[
-        styles.visual,
-        isDesktop && styles.desktopVisual,
-        { backgroundColor: proposal.accentSoftColor },
-      ]}
-    >
-      <View
-        style={[
-          styles.largeCircle,
-          { backgroundColor: proposal.accentColor },
-        ]}
+    style={[
+      styles.visual,
+      isDesktop && styles.desktopVisual,
+      { backgroundColor: proposal.accentSoftColor },
+    ]}
+  >
+    {proposal.imageUrl ? (
+      <Image
+        source={{ uri: proposal.imageUrl }}
+        style={styles.destinationImage}
+        resizeMode="cover"
       />
+    ) : (
+      <>
+        <View
+          style={[
+            styles.largeCircle,
+            { backgroundColor: proposal.accentColor },
+          ]}
+        />
 
-      <View
-        style={[
-          styles.smallCircle,
-          { borderColor: proposal.accentColor },
-        ]}
-      />
+        <Ionicons
+          name="airplane"
+          size={isDesktop ? 40 : 34}
+          color={proposal.accentColor}
+          style={styles.plane}
+        />
+      </>
+    )}
 
+    <View style={styles.imageOverlay} />
+
+    {proposal.flagUrl && (
       <View style={styles.flagBadge}>
-        <Text style={styles.flag}>{proposal.flag}</Text>
+        <Image
+          source={{ uri: proposal.flagUrl }}
+          style={styles.flagImage}
+          resizeMode="cover"
+        />
       </View>
+    )}
 
+    <View style={styles.votesOverlay}>
       <Ionicons
-        name="airplane"
-        size={isDesktop ? 40 : 34}
-        color={proposal.accentColor}
-        style={styles.plane}
+        name="heart"
+        size={13}
+        color="#FFFFFF"
       />
 
-      <View style={styles.votesOverlay}>
-        <Ionicons name="heart" size={13} color="#FFFFFF" />
-
-        <Text style={styles.votesOverlayText}>
-          {proposal.votes} vote{proposal.votes > 1 ? 's' : ''}
-        </Text>
-      </View>
+      <Text style={styles.votesOverlayText}>
+        {proposal.votes} vote{proposal.votes > 1 ? 's' : ''}
+      </Text>
     </View>
+  </View>
 
     <View style={[styles.content, isDesktop && styles.desktopContent]}>
       <View style={styles.contentHeader}>
@@ -272,6 +288,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     },
 
+    flagImage: {
+      width: 28,
+      height: 19,
+      borderRadius: 3,
+    },
+
     contentHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -281,6 +303,25 @@ const styles = StyleSheet.create({
 
     destinationIdentity: {
     flex: 1,
+    },
+
+    destinationImage: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      width: '100%',
+      height: '100%',
+    },
+
+    imageOverlay: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+      backgroundColor: 'rgba(8, 29, 53, 0.10)',
     },
 
     budgetBlock: {

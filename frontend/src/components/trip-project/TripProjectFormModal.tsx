@@ -15,15 +15,20 @@ import {
 
 import { Button } from '@/components/ui/Button';
 import { ApiError } from '@/services/apiClient';
+import { colors, radius, spacing, typography } from '@/theme';
+import type { TripProjectDetail } from '@/types/tripProject';
+
 import {
   createTripProject,
+  updateTripProject,
   type CreateTripProjectInput,
+  type UpdateTripProjectInput,
 } from '@/services/tripProjectService';
-import { colors, radius, spacing, typography } from '@/theme';
 
 type TripProjectFormModalProps = {
   visible: boolean;
-  mode: 'create';
+  mode: 'create' | 'edit';
+  project?: TripProjectDetail;
   onClose: () => void;
   onSuccess: () => void | Promise<void>;
 };
@@ -36,6 +41,7 @@ type FormErrors = {
 export function TripProjectFormModal({
   visible,
   mode,
+  project,
   onClose,
   onSuccess,
 }: TripProjectFormModalProps) {
@@ -52,15 +58,26 @@ export function TripProjectFormModal({
 
   useEffect(() => {
     if (!visible) {
+      return;
+    }
+
+    if (mode === 'edit' && project) {
+      setTitle(project.title ?? '');
+      setDescription(project.description ?? '');
+      setStartDate(project.startDate ?? '');
+      setEndDate(project.endDate ?? '');
+      setEstimatedBudget(project.estimatedBudget ?? '');
+    } else {
       setTitle('');
       setDescription('');
       setStartDate('');
       setEndDate('');
       setEstimatedBudget('');
-      setErrors({});
-      setSubmitting(false);
     }
-  }, [visible]);
+
+    setErrors({});
+    setSubmitting(false);
+  }, [visible, mode, project]);
 
   const handleSubmit = async () => {
     const normalizedTitle = title.trim();
@@ -101,7 +118,19 @@ export function TripProjectFormModal({
     setErrors({});
 
     try {
-      await createTripProject(payload);
+      if (mode === 'edit' && project) {
+        const updatePayload: UpdateTripProjectInput = {
+          title: normalizedTitle,
+          description: normalizedDescription || null,
+          startDate: normalizedStartDate || null,
+          endDate: normalizedEndDate || null,
+          estimatedBudget: normalizedBudget || null,
+        };
+
+        await updateTripProject(project.id, updatePayload);
+      } else {
+        await createTripProject(payload);
+      }
       await onSuccess();
     } catch (error) {
       if (error instanceof ApiError) {
@@ -118,10 +147,6 @@ export function TripProjectFormModal({
       setSubmitting(false);
     }
   };
-
-  if (mode !== 'create') {
-    return null;
-  }
 
   return (
     <Modal
@@ -149,7 +174,9 @@ export function TripProjectFormModal({
         >
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Créer un voyage</Text>
+              <Text style={styles.title}>
+                {mode === 'edit' ? 'Modifier le voyage' : 'Créer un voyage'}
+              </Text>
             </View>
 
             <Pressable
@@ -250,10 +277,18 @@ export function TripProjectFormModal({
                 ]}
               >
                 <Button
-                  label={submitting ? 'Création…' : 'Créer le voyage'}
-                  onPress={() => void handleSubmit()}
-                  disabled={submitting}
-                />
+                    label={
+                      submitting
+                        ? mode === 'edit'
+                          ? 'Enregistrement…'
+                          : 'Création…'
+                        : mode === 'edit'
+                          ? 'Enregistrer'
+                          : 'Créer le voyage'
+                    }
+                    onPress={() => void handleSubmit()}
+                    disabled={submitting}
+                  />
               </View>
             </View>
           </ScrollView>

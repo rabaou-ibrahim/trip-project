@@ -31,6 +31,29 @@ export type UpdateTripProjectInput = {
   status?: string;
 };
 
+export function removeTripParticipant(
+  projectId: number,
+  participantId: number,
+): Promise<{ message: string }> {
+  if (
+    !Number.isInteger(projectId) ||
+    projectId <= 0 ||
+    !Number.isInteger(participantId) ||
+    participantId <= 0
+  ) {
+    return Promise.reject(
+      new Error('Identifiant de participant invalide.'),
+    );
+  }
+
+  return apiRequest<{ message: string }>(
+    `/api/trip-projects/${projectId}/participants/${participantId}`,
+    {
+      method: 'DELETE',
+    },
+  );
+}
+
 export function getTripProjects(): Promise<TripProjectListItem[]> {
   return apiRequest<TripProjectListItem[]>('/api/trip-projects');
 }
@@ -87,6 +110,23 @@ export function completeParticipantsStep(
 
   return apiRequest<{ participantsStepCompleted: boolean }>(
     `/api/trip-projects/${id}/participants/complete`,
+    {
+      method: 'PATCH',
+    },
+  );
+}
+
+export function completeAvailabilitiesStep(
+  id: number,
+): Promise<{ availabilitiesStepCompleted: boolean }> {
+  if (!Number.isInteger(id) || id <= 0) {
+    return Promise.reject(
+      new Error('Identifiant de projet invalide.'),
+    );
+  }
+
+  return apiRequest<{ availabilitiesStepCompleted: boolean }>(
+    `/api/trip-projects/${id}/availabilities/complete`,
     {
       method: 'PATCH',
     },

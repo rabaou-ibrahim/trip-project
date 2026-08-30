@@ -105,7 +105,7 @@ function NavigationItem({
       ]}
     >
       <View style={styles.iconContainer}>
-        <Ionicons name={icon} size={22} color={color} />
+        <Ionicons name={icon} size={21} color={color} />
 
         {typeof badge === 'number' && badge > 0 && (
           <View style={styles.badge}>
@@ -128,37 +128,37 @@ function NavigationItem({
 
 const styles = StyleSheet.create({
   navigation: {
-    minHeight: 82,
+    minHeight: 72,
     paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: 9,
+    paddingTop: 7,
+    paddingBottom: 8,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-around',
     backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#DDE5EF',
+    borderTopColor: '#E5EBF2',
   },
 
   navigationItem: {
     flex: 1,
     minWidth: 0,
-    minHeight: 56,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+  },
+
+  label: {
+    color: '#52657B',
+    fontSize: 9.5,
+    fontFamily: typography.fontFamily.medium,
   },
 
   iconContainer: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-
-  label: {
-    color: '#52657B',
-    fontSize: 10.5,
-    fontFamily: typography.fontFamily.medium,
   },
 
   labelActive: {
