@@ -5,9 +5,9 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 
 import { colors, radius, typography } from '@/theme';
+import { usePendingInvitationCount } from '@/hooks/usePendingInvitationCount';
 
 type MobileNavigationItemId =
-  | 'home'
   | 'trips'
   | 'invitations'
   | 'profile';
@@ -29,48 +29,33 @@ export function MobileBottomNavigation({
   activeItem,
 }: MobileBottomNavigationProps) {
   const router = useRouter();
+  const invitationCount = usePendingInvitationCount()
 
   function handleNavigation(item: MobileNavigationItemId) {
-    if (item === 'home') {
+    if (item === 'trips') {
       router.push('/');
       return;
     }
-    if (item === 'profile') {
-      router.push('/profile');
+
+    if (item === 'invitations') {
+      router.push('/invitations');
       return;
     }
-    console.log(`Open mobile navigation: ${item}`);
+
+    if (item === 'profile') {
+      router.push('/profile');
+    }
   }
 
   return (
     <View style={styles.navigation}>
       <NavigationItem
-        id="home"
-        label="Accueil"
-        icon={activeItem === 'home' ? 'home' : 'home-outline'}
-        active={activeItem === 'home'}
-        onPress={() => handleNavigation('home')}
-      />
-
-      <NavigationItem
         id="trips"
         label="Voyages"
-        icon={activeItem === 'trips' ? 'people' : 'people-outline'}
+        icon={activeItem === 'trips' ? 'airplane' : 'airplane-outline'}
         active={activeItem === 'trips'}
         onPress={() => handleNavigation('trips')}
       />
-
-      <Pressable
-        onPress={() => console.log('Create trip')}
-        accessibilityRole="button"
-        accessibilityLabel="Créer un voyage"
-        style={({ pressed }) => [
-          styles.createButton,
-          pressed && styles.itemPressed,
-        ]}
-      >
-        <Ionicons name="add" size={31} color="#FFFFFF" />
-      </Pressable>
 
       <NavigationItem
         id="invitations"
@@ -81,7 +66,7 @@ export function MobileBottomNavigation({
             : 'notifications-outline'
         }
         active={activeItem === 'invitations'}
-        badge={2}
+        badge={invitationCount}
         onPress={() => handleNavigation('invitations')}
       />
 
@@ -120,7 +105,7 @@ function NavigationItem({
       ]}
     >
       <View style={styles.iconContainer}>
-        <Ionicons name={icon} size={22} color={color} />
+        <Ionicons name={icon} size={21} color={color} />
 
         {typeof badge === 'number' && badge > 0 && (
           <View style={styles.badge}>
@@ -143,25 +128,31 @@ function NavigationItem({
 
 const styles = StyleSheet.create({
   navigation: {
-    minHeight: 82,
+    minHeight: 72,
     paddingHorizontal: 8,
-    paddingTop: 10,
-    paddingBottom: 9,
+    paddingTop: 7,
+    paddingBottom: 8,
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-around',
     backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#DDE5EF',
+    borderTopColor: '#E5EBF2',
   },
 
   navigationItem: {
     flex: 1,
     minWidth: 0,
-    minHeight: 56,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+  },
+
+  label: {
+    color: '#52657B',
+    fontSize: 9.5,
+    fontFamily: typography.fontFamily.medium,
   },
 
   iconContainer: {
@@ -170,29 +161,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  label: {
-    color: '#52657B',
-    fontSize: 10.5,
-    fontFamily: typography.fontFamily.medium,
-  },
-
   labelActive: {
     color: colors.primary,
     fontFamily: typography.fontFamily.semibold,
-  },
-
-  createButton: {
-    width: 60,
-    height: 60,
-    marginHorizontal: 4,
-    marginTop: -25,
-    flexShrink: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.primary,
-    borderWidth: 5,
-    borderColor: colors.surface,
-    borderRadius: radius.full,
   },
 
   badge: {

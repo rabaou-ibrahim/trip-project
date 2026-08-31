@@ -1,4 +1,4 @@
-import { ApiError } from '@/services/apiClient';
+import { ApiError, setUnauthorizedHandler, } from '@/services/apiClient';
 import { getCurrentUser, login } from '@/services/authService';
 import {
   getStoredToken,
@@ -15,6 +15,7 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { getMe } from '@/services/userService';
 
 type AuthStatus =
   | 'loading'
@@ -27,6 +28,7 @@ type AuthContextValue = {
   status: AuthStatus;
   sessionError: string | null;
   isAuthenticated: boolean;
+  refreshUser: () => Promise<void>;
   signIn: (credentials: LoginRequest) => Promise<void>;
   signOut: () => Promise<void>;
   retrySession: () => Promise<void>;
@@ -38,6 +40,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const refreshUser = useCallback(async () => {
+    const refreshedUser = await getMe();
+    setUser(refreshedUser);
+  }, []);
 
   const restoreSession = useCallback(async () => {
     setStatus('loading');
@@ -76,6 +82,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void restoreSession();
   }, [restoreSession]);
 
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setUser(null);
+      setSessionError(null);
+      setStatus('unauthenticated');
+    });
+
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, []);
+
   const signIn = useCallback(async (credentials: LoginRequest) => {
     const response = await login(credentials);
 
@@ -111,6 +129,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isAuthenticated: status === 'authenticated',
       signIn,
       signOut,
+      refreshUser,
       retrySession: restoreSession,
     }),
     [restoreSession, sessionError, signIn, signOut, status, user],

@@ -37,20 +37,126 @@ class DestinationProposal
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?TripProject $tripProject = null;
 
-    public function __construct() { $this->createdAt = new \DateTimeImmutable(); }
-    public function getId(): ?int { return $this->id; }
-    public function getCity(): ?string { return $this->city; }
-    public function setCity(string $city): static { $this->city = $city; return $this; }
-    public function getCountry(): ?string { return $this->country; }
-    public function setCountry(string $country): static { $this->country = $country; return $this; }
-    public function getDescription(): ?string { return $this->description; }
-    public function setDescription(?string $description): static { $this->description = $description; return $this; }
-    public function getEstimatedCost(): ?string { return $this->estimatedCost; }
-    public function setEstimatedCost(?string $estimatedCost): static { $this->estimatedCost = $estimatedCost; return $this; }
-    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
-    public function setCreatedAt(\DateTimeImmutable $createdAt): static { $this->createdAt = $createdAt; return $this; }
-    public function getProposedBy(): ?User { return $this->proposedBy; }
-    public function setProposedBy(User $proposedBy): static { $this->proposedBy = $proposedBy; return $this; }
-    public function getTripProject(): ?TripProject { return $this->tripProject; }
-    public function setTripProject(TripProject $tripProject): static { $this->tripProject = $tripProject; return $this; }
+    #[ORM\Column(nullable: true)]
+    private ?float $latitude = null;
+
+    #[ORM\Column(length: 2, nullable: true)]
+    private ?string $countryCode = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $longitude = null;
+
+    public function __construct() { 
+        $this->createdAt = new \DateTimeImmutable(); 
+    }
+
+    public function getId(): ?int { 
+        return $this->id; 
+    }
+
+    public function getCity(): ?string { 
+        return $this->city; 
+    }
+
+    public function setCity(string $city): static { 
+        $this->city = $city; return $this; 
+    }
+
+    public function getCountry(): ?string { 
+        return $this->country; 
+    }
+
+    public function setCountry(string $country): static { 
+        $this->country = $country; return $this;
+    }
+
+    public function getCountryCode(): ?string
+    {
+        return $this->countryCode;
+    }
+
+    public function setCountryCode(?string $countryCode): static
+    {
+        $this->countryCode = $countryCode;
+
+        return $this;
+    }
+
+    public function getDescription(): ?string { 
+        return $this->description; 
+    }
+
+    public function setDescription(?string $description): static { 
+        $this->description = $description; return $this; 
+    }
+
+    public function getEstimatedCost(): ?string { 
+        return $this->estimatedCost; 
+    }
+    public function setEstimatedCost(?string $estimatedCost): static { 
+        $this->estimatedCost = $estimatedCost; return $this; 
+    }
+
+    public function getCreatedAt(): ?\DateTimeImmutable { 
+        return $this->createdAt; 
+    }
+
+    public function setCreatedAt(\DateTimeImmutable $createdAt): static { 
+        $this->createdAt = $createdAt; return $this; 
+    }
+
+    public function getProposedBy(): ?User { 
+        return $this->proposedBy; 
+    }
+
+    public function setProposedBy(User $proposedBy): static { 
+        $this->proposedBy = $proposedBy; return $this; 
+    }
+
+    public function getTripProject(): ?TripProject { 
+        return $this->tripProject; 
+    }
+
+    public function setTripProject(TripProject $tripProject): static { 
+        $this->tripProject = $tripProject; return $this; 
+    }
+
+    #[ORM\Column(length: 2048, nullable: true)]
+    private ?string $imageUrl = null;
+
+    public function getImageUrl(): ?string
+    {
+        return $this->imageUrl;
+    }
+
+    public function setImageUrl(?string $imageUrl): static
+    {
+        $this->imageUrl = $imageUrl;
+
+        return $this;
+    }
+
+    public function getLatitude(): ?float
+    {
+        return $this->latitude;
+    }
+
+    public function setLatitude(?float $latitude): static
+    {
+        $this->latitude = $latitude;
+
+        return $this;
+    }
+
+    public function getLongitude(): ?float
+    {
+        return $this->longitude;
+    }
+
+    public function setLongitude(?float $longitude): static
+    {
+        $this->longitude = $longitude;
+
+        return $this;
+    }
 }

@@ -35,7 +35,7 @@ export function MobileHeroTripCard({
   selectedDestination,
   participantCount,
   imageSource,
-  currentStep = 'Projet en cours',
+  currentStep = 'Projet en préparation',
   progress,
   onPress,
 }: MobileHeroTripCardProps) {
@@ -79,7 +79,7 @@ export function MobileHeroTripCard({
         <View style={styles.topRow}>
           <View style={styles.statusStamp}>
             <View style={styles.statusDot} />
-            <Text style={styles.statusStampText}>EN COURS</Text>
+            <Text style={styles.statusStampText}>À POURSUIVRE</Text>
           </View>
 
           <View style={styles.expandButton}>

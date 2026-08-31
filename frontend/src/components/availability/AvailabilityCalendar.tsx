@@ -1,1062 +1,1104 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Ionicons from '@expo/vector-icons/Ionicons';
+  import Ionicons from '@expo/vector-icons/Ionicons';
+  import { useEffect, useMemo, useState } from 'react';
+  import {
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+  } from 'react-native';
 
-import { colors, radius, spacing, typography } from '@/theme';
+  import { colors, radius, spacing, typography } from '@/theme';
 
-type AvailabilityState = 'available' | 'partial' | 'unavailable';
+  export type AvailabilityPeriod = {
+    id: number;
+    startDate: string;
+    endDate: string;
+  };
 
-type AvailabilityCalendarProps = {
-  mode: 'mine' | 'common';
-  isDesktop?: boolean;
-  onPrimaryAction?: () => void;
-};
+  type AvailabilityCalendarProps = {
+    mode: 'mine' | 'common';
+    isDesktop?: boolean;
 
-type Participant = {
-  name: string;
-  initials: string;
-  color: string;
-  isCurrentUser?: boolean;
-};
+    periods?: AvailabilityPeriod[];
+    commonPeriods?: AvailabilityPeriod[];
+    commonMessage?: string | null;
 
-const WEEKDAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-const TODAY = new Date();
-const INITIAL_YEAR = TODAY.getFullYear();
-const INITIAL_MONTH_INDEX = TODAY.getMonth();
+    loading?: boolean;
 
-const initialDateKey = (day: number) =>
-  `${INITIAL_YEAR}-${String(INITIAL_MONTH_INDEX + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    onCreatePeriod?: (
+      startDate: string,
+      endDate: string,
+    ) => void | Promise<void>;
 
-const INITIAL_AVAILABILITIES: Record<string, AvailabilityState> = {
-  [initialDateKey(14)]: 'available',
-  [initialDateKey(15)]: 'available',
-  [initialDateKey(16)]: 'available',
-  [initialDateKey(17)]: 'available',
-  [initialDateKey(18)]: 'available',
-  [initialDateKey(19)]: 'partial',
-  [initialDateKey(20)]: 'partial',
-  [initialDateKey(21)]: 'partial',
-  [initialDateKey(22)]: 'partial',
-  [initialDateKey(23)]: 'partial',
-  [initialDateKey(26)]: 'unavailable',
-};
+    onUpdatePeriod?: (
+      id: number,
+      startDate: string,
+      endDate: string,
+    ) => void | Promise<void>;
 
-const COMMON_AVAILABILITIES: Record<string, AvailabilityState> = {
-  [initialDateKey(14)]: 'partial',
-  [initialDateKey(15)]: 'available',
-  [initialDateKey(16)]: 'available',
-  [initialDateKey(17)]: 'available',
-  [initialDateKey(18)]: 'available',
-  [initialDateKey(21)]: 'partial',
-  [initialDateKey(22)]: 'partial',
-  [initialDateKey(23)]: 'partial',
-};
+    onDeletePeriod?: (id: number) => void | Promise<void>;
 
-const PARTICIPANTS: Participant[] = [
-  { name: 'Ibrahim', initials: 'IB', color: '#2563EB', isCurrentUser: true },
-  { name: 'Alice', initials: 'AL', color: '#0F766E' },
-  { name: 'Mehdi', initials: 'ME', color: '#D97706' },
-  { name: 'Lucas', initials: 'LU', color: '#7C3AED' },
-  { name: 'Chloé', initials: 'CH', color: '#DB2777' },
-];
+    onPrimaryAction?: () => void;
+  };
 
-export function AvailabilityCalendar({
-  mode,
-  isDesktop = false,
-  onPrimaryAction,
-}: AvailabilityCalendarProps) {
-  const [availabilities, setAvailabilities] = useState(
-    INITIAL_AVAILABILITIES,
-  );
-  const [displayedMonth, setDisplayedMonth] = useState(
-    () => new Date(INITIAL_YEAR, INITIAL_MONTH_INDEX, 1),
-  );
+  const WEEKDAYS = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
 
-  const year = displayedMonth.getFullYear();
-  const monthIndex = displayedMonth.getMonth();
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const emptyCells = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+  export function AvailabilityCalendar({
+    mode,
+    isDesktop = false,
+    periods = [],
+    commonPeriods = [],
+    commonMessage = null,
+    loading = false,
+    onCreatePeriod,
+    onUpdatePeriod,
+    onDeletePeriod,
+    onPrimaryAction,
+  }: AvailabilityCalendarProps) {
+    const [displayedMonth, setDisplayedMonth] = useState(() => {
+      const firstPeriod = periods[0];
 
-  const monthLabel = useMemo(() => {
-    const value = displayedMonth.toLocaleDateString('fr-FR', {
-      month: 'long',
-      year: 'numeric',
+      if (firstPeriod) {
+        const [year, month] = firstPeriod.startDate.split('-').map(Number);
+        return new Date(year, month - 1, 1);
+      }
+
+      const today = new Date();
+      return new Date(today.getFullYear(), today.getMonth(), 1);
     });
+    const [datePickerOpen, setDatePickerOpen] = useState(false);
 
-    return value.charAt(0).toUpperCase() + value.slice(1);
-  }, [displayedMonth]);
+    const [selectionStart, setSelectionStart] = useState<string | null>(null);
+    const [selectionEnd, setSelectionEnd] = useState<string | null>(null);
 
-  const isInitialMonth =
-    year === INITIAL_YEAR && monthIndex === INITIAL_MONTH_INDEX;
+    const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
-  const dateKeyForDay = (day: number) =>
-    `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    useEffect(() => {
+      if (periods.length === 0) {
+        return;
+      }
 
-  const changeMonth = (offset: number) => {
-    setDisplayedMonth(
-      current =>
-        new Date(
-          current.getFullYear(),
-          current.getMonth() + offset,
-          1,
-        ),
-    );
-  };
+      const [year, month] = periods[0].startDate.split('-').map(Number);
 
-  const resetMonth = () => {
-    setDisplayedMonth(new Date(INITIAL_YEAR, INITIAL_MONTH_INDEX, 1));
-  };
+      setDisplayedMonth(current => {
+        if (
+          current.getFullYear() === year &&
+          current.getMonth() === month - 1
+        ) {
+          return current;
+        }
 
-  const handleDayPress = (day: number) => {
-    if (mode === 'common') return;
+        return new Date(year, month - 1, 1);
+      });
+    }, [periods]);
 
-    const dateKey = dateKeyForDay(day);
+    const year = displayedMonth.getFullYear();
+    const monthIndex = displayedMonth.getMonth();
 
-    setAvailabilities(current => {
-      const next = { ...current };
-      const state = current[dateKey];
+    const daysInMonth = new Date(
+      year,
+      monthIndex + 1,
+      0,
+    ).getDate();
 
-      if (!state) next[dateKey] = 'available';
-      else if (state === 'available') next[dateKey] = 'partial';
-      else if (state === 'partial') next[dateKey] = 'unavailable';
-      else delete next[dateKey];
+    const emptyCells =
+      (new Date(year, monthIndex, 1).getDay() + 6) % 7;
 
-      return next;
-    });
-  };
+    const monthLabel = useMemo(() => {
+      const label = displayedMonth.toLocaleDateString('fr-FR', {
+        month: 'long',
+        year: 'numeric',
+      });
 
-  const stateForDay = (day: number) => {
-    const dateKey = dateKeyForDay(day);
+      return label.charAt(0).toUpperCase() + label.slice(1);
+    }, [displayedMonth]);
 
-    return mode === 'mine'
-      ? availabilities[dateKey]
-      : COMMON_AVAILABILITIES[dateKey];
-  };
+    const visiblePeriods =
+      mode === 'mine' ? periods : commonPeriods;
 
-  const calendar = (
-    <CalendarGrid
-      monthLabel={monthLabel}
-      emptyCells={emptyCells}
-      daysInMonth={daysInMonth}
-      isDesktop={isDesktop}
-      mode={mode}
-      stateForDay={stateForDay}
-      dateKeyForDay={dateKeyForDay}
-      onDayPress={handleDayPress}
-      onPreviousMonth={() => changeMonth(-1)}
-      onNextMonth={() => changeMonth(1)}
-    />
-  );
+    const dateKeyForDay = (day: number) =>
+      `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(
+        day,
+      ).padStart(2, '0')}`;
 
-  if (isDesktop && mode === 'mine') {
+    const isDayAvailable = (day: number) => {
+      const date = dateKeyForDay(day);
+
+      return visiblePeriods.some(
+        period =>
+          date >= period.startDate &&
+          date <= period.endDate,
+      );
+    };
+
+    const changeMonth = (offset: number) => {
+      setDisplayedMonth(
+        current =>
+          new Date(
+            current.getFullYear(),
+            current.getMonth() + offset,
+            1,
+          ),
+      );
+    };
+
+    const isSelectedDay = (day: number) => {
+      const date = dateKeyForDay(day);
+
+      if (!selectionStart) {
+        return false;
+      }
+
+      if (!selectionEnd) {
+        return date === selectionStart;
+      }
+
+      return date >= selectionStart && date <= selectionEnd;
+    };
+
+    const isSelectionStart = (day: number) =>
+    dateKeyForDay(day) === selectionStart;
+
+    const isSelectionEnd = (day: number) =>
+      dateKeyForDay(day) === selectionEnd;
+
+    const handleDelete = async (periodId: number) => {
+      try {
+        await onDeletePeriod?.(periodId);
+      } catch (error) {
+        console.error(
+          'Impossible de supprimer la disponibilité :',
+          error,
+        );
+      }
+    };
+
+    const handleDayPress = (day: number) => {
+      if (mode === 'common') {
+        return;
+      }
+
+      const date = dateKeyForDay(day);
+
+      // Premier clic : nouvelle date de début
+      if (!selectionStart || selectionEnd) {
+        setSelectionStart(date);
+        setSelectionEnd(null);
+        return;
+      }
+
+      // Deuxième clic : date de fin
+      if (date <= selectionStart) {
+        setSelectionStart(date);
+        setSelectionEnd(null);
+        return;
+      }
+
+      setSelectionEnd(date);
+    };
+
+    const handleSaveSelectedPeriod = async () => {
+      if (!selectionStart || !selectionEnd || saving) {
+        return;
+      }
+
+      try {
+        setSaving(true);
+        setSaveError(null);
+
+        if (editingPeriodId !== null) {
+          await onUpdatePeriod?.(
+            editingPeriodId,
+            selectionStart,
+            selectionEnd,
+          );
+        } else {
+          await onCreatePeriod?.(
+            selectionStart,
+            selectionEnd,
+          );
+        }
+
+        setSelectionStart(null);
+        setSelectionEnd(null);
+        setEditingPeriodId(null);
+      } catch (error) {
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : 'Impossible d’enregistrer cette période.',
+        );
+        setSelectionStart(null);
+        setSelectionEnd(null);
+        setEditingPeriodId(null);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const handleAddSelectedPeriod = async () => {
+      if (!selectionStart || !selectionEnd) {
+        return;
+      }
+
+      await onCreatePeriod?.(
+        selectionStart,
+        selectionEnd,
+      );
+
+      setSelectionStart(null);
+      setSelectionEnd(null);
+    };
+
     return (
-      <View style={styles.desktopMinePanel}>
-        <View style={styles.mineHeader}>
-          <View style={styles.mineHeaderText}>
-            <Text style={styles.panelHeading}>
-              Mes disponibilités
-            </Text>
-
-            <Text style={styles.panelDescription}>
-              Indiquez les jours où vous êtes disponible pour ce voyage.
-            </Text>
-          </View>
-
-          <View style={styles.daysBadge}>
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={20}
-              color={colors.secondary}
-            />
-
-            <View>
-              <Text style={styles.daysBadgeValue}>
-                11 jours renseignés
-              </Text>
-
-              <Text style={styles.daysBadgeLabel}>
-                sur le mois affiché
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.mineWorkspace}>
-          <View style={styles.mineCalendarColumn}>
-            {calendar}
-
-            <CalendarLegend />
-
-            {!isInitialMonth && (
-              <ResetMonthButton onPress={resetMonth} />
-            )}
-          </View>
-
-          <View style={styles.mineHelpCard}>
-            <View style={styles.mineHelpIcon}>
+      <View
+        style={[
+          styles.wrapper,
+          isDesktop && styles.desktopWrapper,
+        ]}
+      >
+        <View style={styles.calendarCard}>
+          <View style={styles.monthHeader}>
+            <Pressable
+              onPress={() => changeMonth(-1)}
+              accessibilityRole="button"
+              accessibilityLabel="Mois précédent"
+              style={({ pressed }) => [
+                styles.monthButton,
+                pressed && styles.pressed,
+              ]}
+            >
               <Ionicons
-                name="finger-print-outline"
-                size={26}
-                color={colors.primary}
+                name="chevron-back"
+                size={17}
+                color={colors.textSecondary}
               />
-            </View>
+            </Pressable>
 
-            <Text style={styles.mineHelpTitle}>
-              Renseignez vos dates
-            </Text>
+            <Pressable
+              onPress={() => setDatePickerOpen(current => !current)}
+              style={styles.monthSelector}
+            >
+              <Text style={styles.monthTitle}>{monthLabel}</Text>
 
-            <Text style={styles.mineHelpDescription}>
-              Cliquez plusieurs fois sur une journée pour modifier son état.
-            </Text>
-
-            <View style={styles.helpItem}>
-              <View
-                style={[
-                  styles.helpColor,
-                  { backgroundColor: '#A7E2C2' },
-                ]}
+              <Ionicons
+                name={datePickerOpen ? 'chevron-up' : 'chevron-down'}
+                size={15}
+                color={colors.textSecondary}
               />
-              <View>
-                <Text style={styles.helpLabel}>Disponible</Text>
-                <Text style={styles.helpDetail}>
-                  Vous pouvez participer
-                </Text>
-              </View>
-            </View>
+            </Pressable>
 
-            <View style={styles.helpItem}>
-              <View
-                style={[
-                  styles.helpColor,
-                  { backgroundColor: '#16A879' },
-                ]}
+            <Pressable
+              onPress={() => changeMonth(1)}
+              accessibilityRole="button"
+              accessibilityLabel="Mois suivant"
+              style={({ pressed }) => [
+                styles.monthButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={17}
+                color={colors.textSecondary}
               />
-              <View>
-                <Text style={styles.helpLabel}>Partiel</Text>
-                <Text style={styles.helpDetail}>
-                  Votre présence reste à confirmer
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.helpItem}>
-              <View
-                style={[
-                  styles.helpColor,
-                  { backgroundColor: '#EF5B5B' },
-                ]}
-              />
-              <View>
-                <Text style={styles.helpLabel}>Indisponible</Text>
-                <Text style={styles.helpDetail}>
-                  Vous ne pouvez pas participer
-                </Text>
-              </View>
-            </View>
+            </Pressable>
           </View>
-        </View>
+          {datePickerOpen && (
+            <View style={styles.datePicker}>
+              <Text style={styles.pickerLabel}>Année</Text>
 
-        <PrimaryButton
-          mode={mode}
-          onPress={onPrimaryAction}
-        />
-      </View>
-    );
-  }
+              <View style={styles.yearGrid}>
+                {Array.from({ length: 11 }, (_, index) => {
+                  const pickerYear = new Date().getFullYear() + index;
 
-  if (isDesktop && mode === 'common') {
-    return (
-      <View style={styles.desktopCommonLayout}>
-        <ParticipantsPanel />
+                  return (
+                    <Pressable
+                      key={pickerYear}
+                      onPress={() =>
+                        setDisplayedMonth(
+                          new Date(pickerYear, displayedMonth.getMonth(), 1),
+                        )
+                      }
+                      style={[
+                        styles.yearButton,
+                        year === pickerYear && styles.pickerButtonActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.pickerButtonText,
+                          year === pickerYear && styles.pickerButtonTextActive,
+                        ]}
+                      >
+                        {pickerYear}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-        <View style={styles.desktopCenterPanel}>
-          <View style={styles.panelHeadingBlock}>
-            <Text style={styles.panelHeading}>
-              Périodes communes identifiées
-            </Text>
-            <Text style={styles.panelDescription}>
-              Basées sur les disponibilités de tous les participants
-            </Text>
-          </View>
+              <Text style={styles.pickerLabel}>Mois</Text>
 
-          {calendar}
-          <CalendarLegend />
-
-          {!isInitialMonth && (
-            <ResetMonthButton onPress={resetMonth} />
+              <View style={styles.monthGrid}>
+                {[
+                  'Jan', 'Fév', 'Mar', 'Avr',
+                  'Mai', 'Juin', 'Juil', 'Août',
+                  'Sep', 'Oct', 'Nov', 'Déc',
+                ].map((month, index) => (
+                  <Pressable
+                    key={month}
+                    onPress={() => {
+                      setDisplayedMonth(new Date(year, index, 1));
+                      setDatePickerOpen(false);
+                    }}
+                    style={[
+                      styles.monthPickerButton,
+                      monthIndex === index && styles.pickerButtonActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pickerButtonText,
+                        monthIndex === index && styles.pickerButtonTextActive,
+                      ]}
+                    >
+                      {month}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
           )}
 
-          <PrimaryButton mode={mode} onPress={onPrimaryAction} />
-        </View>
-
-        <View style={styles.desktopSideColumn}>
-          <SynthesisPanel hasPeriods={isInitialMonth} />
-
-          <View style={styles.decorativeCard}>
-            <View style={styles.decorativeIcon}>
-              <Ionicons name="airplane" size={34} color={colors.primary} />
-            </View>
-            <Text style={styles.decorativeTitle}>Le groupe est prêt</Text>
-            <Text style={styles.decorativeText}>
-              Les périodes communes permettront de proposer des destinations
-              adaptées à tout le monde.
-            </Text>
+          <View style={styles.weekRow}>
+            {WEEKDAYS.map(day => (
+              <Text key={day} style={styles.weekday}>
+                {day}
+              </Text>
+            ))}
           </View>
-        </View>
-      </View>
-    );
-  }
 
-  return (
-    <View style={[styles.wrapper, isDesktop && styles.desktopWrapper]}>
-      {calendar}
-      <CalendarLegend />
+  <View style={styles.daysGrid}>
+    {Array.from({ length: emptyCells }).map((_, index) => (
+      <View
+        key={`empty-${index}`}
+        style={styles.dayCell}
+      />
+    ))}
 
-      {!isInitialMonth && <ResetMonthButton onPress={resetMonth} />}
+    {Array.from({ length: daysInMonth }).map((_, index) => {
+      const day = index + 1;
+      const available = isDayAvailable(day);
+      const selected = isSelectedDay(day);
 
-      {mode === 'common' && isInitialMonth && <MobileCommonSummary />}
+      return (
+        <View
+          key={dateKeyForDay(day)}
+          style={styles.dayCell}
+        >
+          <Pressable
+            onPress={() => handleDayPress(day)}
+            disabled={mode === 'common'}
+            accessibilityRole="button"
+            accessibilityLabel={`${day} ${monthLabel}`}
+            style={({ pressed }) => [
+            styles.day,
+            available && styles.availableDay,
 
-      <PrimaryButton mode={mode} onPress={onPrimaryAction} />
-    </View>
-  );
-}
+            selected && styles.selectedDay,
+            isSelectionStart(day) && styles.selectedStartDay,
+            isSelectionEnd(day) && styles.selectedEndDay,
 
-function CalendarGrid({
-  monthLabel,
-  emptyCells,
-  daysInMonth,
-  isDesktop,
-  mode,
-  stateForDay,
-  dateKeyForDay,
-  onDayPress,
-  onPreviousMonth,
-  onNextMonth,
-}: {
-  monthLabel: string;
-  emptyCells: number;
-  daysInMonth: number;
-  isDesktop: boolean;
-  mode: 'mine' | 'common';
-  stateForDay: (day: number) => AvailabilityState | undefined;
-  dateKeyForDay: (day: number) => string;
-  onDayPress: (day: number) => void;
-  onPreviousMonth: () => void;
-  onNextMonth: () => void;
-}) {
-  return (
-    <View
-      style={[
-        styles.calendarCard,
-        isDesktop && styles.desktopCalendarCard,
-      ]}
-    >
-      <View style={styles.monthHeader}>
-        <MonthButton
-          icon="chevron-back"
-          label="Afficher le mois précédent"
-          onPress={onPreviousMonth}
-        />
-
-        <Text style={styles.monthTitle}>{monthLabel}</Text>
-
-        <MonthButton
-          icon="chevron-forward"
-          label="Afficher le mois suivant"
-          onPress={onNextMonth}
-        />
-      </View>
-
-      <View style={styles.weekRow}>
-        {WEEKDAYS.map((weekday, index) => (
-          <Text key={`${weekday}-${index}`} style={styles.weekday}>
-            {weekday}
-          </Text>
-        ))}
-      </View>
-
-      <View style={styles.daysGrid}>
-        {Array.from({ length: emptyCells }).map((_, index) => (
-          <View key={`empty-${index}`} style={styles.dayCell} />
-        ))}
-
-        {Array.from({ length: daysInMonth }).map((_, index) => {
-          const day = index + 1;
-          const dateKey = dateKeyForDay(day);
-          const state = stateForDay(day);
-
-          return (
-            <View key={dateKey} style={styles.dayCell}>
-              <Pressable
-                onPress={() => onDayPress(day)}
-                disabled={mode === 'common'}
-                accessibilityRole="button"
-                accessibilityLabel={`${day} ${monthLabel}${state ? `, ${state}` : ''}`}
-                style={({ pressed }) => [
-                  styles.dayButton,
-                  isDesktop
-                    ? styles.desktopDayButton
-                    : styles.mobileDayButton,
-                  state === 'available' && styles.availableDay,
-                  state === 'partial' && styles.partialDay,
-                  state === 'unavailable' && styles.unavailableDay,
-                  pressed && mode === 'mine' && styles.pressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    state === 'partial' && styles.strongDayText,
-                    state === 'unavailable' && styles.unavailableDayText,
-                  ]}
-                >
-                  {day}
-                </Text>
-              </Pressable>
+            pressed && mode === 'mine' && styles.pressed,
+          ]}
+          >
+            <Text
+              style={[
+                styles.dayText,
+                available && styles.availableDayText,
+                selected && styles.selectedDayText,
+              ]}
+            >
+              {day}
+            </Text>
+          </Pressable>
             </View>
           );
         })}
       </View>
-    </View>
-  );
-}
 
-function ParticipantsPanel() {
-  return (
-    <View style={styles.desktopParticipantsCard}>
-      <View style={styles.participantsHeader}>
-        <Text style={styles.sideHeading}>Participants</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{PARTICIPANTS.length}</Text>
+      <View style={styles.legend}>
+                <LegendItem
+                  color="#9DDFC0"
+                  label={
+                    mode === 'mine'
+                      ? 'Disponible'
+                      : 'Période commune'
+                  }
+                />
+              </View>
+            </View>
+
+            {editingPeriodId !== null && (
+              <Pressable
+                onPress={() => {
+                  setEditingPeriodId(null);
+                  setSelectionStart(null);
+                  setSelectionEnd(null);
+                  setSaveError(null);
+                }}
+                style={({ pressed }) => [
+                  styles.cancelEditButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.cancelEditText}>
+                  Annuler la modification
+                </Text>
+              </Pressable>
+            )}
+
+            {mode === 'mine' ? (
+              <View style={styles.periodsSection}>
+                
+                <Text style={styles.sectionTitle}>
+                  Mes périodes
+                </Text>
+
+                {loading ? (
+                  <Text style={styles.emptyText}>
+                    Chargement…
+                  </Text>
+                ) : periods.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Text style={styles.emptyText}>
+                      Aucune période renseignée.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.periodsList}>
+                    {periods.map(period => (
+                      <PeriodRow
+                          key={period.id}
+                          period={period}
+                          onEdit={() => {
+                            setEditingPeriodId(period.id);
+
+                            // On montre la période actuelle,
+                            // mais la prochaine interaction recommence sa sélection.
+                            setSelectionStart(null);
+                            setSelectionEnd(null);
+
+                            const [year, month] = period.startDate
+                              .split('-')
+                              .map(Number);
+
+                            setDisplayedMonth(
+                              new Date(year, month - 1, 1),
+                            );
+                          }}
+                          onDelete={() =>
+                            void handleDelete(period.id)
+                          }
+                        />
+                    ))}
+                    {saveError && (
+                      <Text style={styles.errorText}>
+                        {saveError}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                <Pressable
+                  onPress={() => void handleSaveSelectedPeriod()}
+                  disabled={!selectionStart || !selectionEnd || saving}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.addButton,
+                    (!selectionStart || !selectionEnd || saving) &&
+                      styles.addButtonDisabled,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Ionicons
+                    name={editingPeriodId !== null ? 'checkmark' : 'add'}
+                    size={18}
+                    color="#FFFFFF"
+                  />
+
+                  <Text style={styles.addButtonText}>
+                    {saving
+                      ? 'Enregistrement…'
+                      : editingPeriodId !== null &&
+                          selectionStart &&
+                          selectionEnd
+                        ? `Modifier du ${formatShortDate(selectionStart)} au ${formatShortDate(selectionEnd)}`
+                        : selectionStart && selectionEnd
+                          ? `Ajouter du ${formatShortDate(selectionStart)} au ${formatShortDate(selectionEnd)}`
+                          : 'Sélectionnez une période'}
+                  </Text>
+                </Pressable>
+          </View>
+        ) : (
+          <View style={styles.commonSection}>
+            <Text style={styles.sectionTitle}>
+              Périodes communes
+            </Text>
+
+            {commonPeriods.length === 0 ? (
+              <Text style={styles.emptyText}>
+                {commonMessage ?? 'Aucune période commune identifiée.'}
+              </Text>
+            ) : (
+              <View style={styles.periodsList}>
+                {commonPeriods.map((period, index) => (
+                  <View
+                    key={`${period.startDate}-${period.endDate}-${index}`}
+                    style={styles.periodRow}
+                  >
+                    <Text style={styles.periodText}>
+                      {formatPeriod(period)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {commonPeriods.length > 0 && (
+              <Pressable
+                onPress={onPrimaryAction}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>
+                  Proposer des destinations
+                </Text>
+
+                <Ionicons
+                  name="arrow-forward"
+                  size={17}
+                  color="#FFFFFF"
+                />
+              </Pressable>
+            )}
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  function PeriodRow({
+    period,
+    onEdit,
+    onDelete,
+  }: {
+    period: AvailabilityPeriod;
+    onEdit: () => void;
+    onDelete: () => void;
+  }) {
+    return (
+      <View style={styles.periodRow}>
+        <Text style={styles.periodText}>
+          {formatPeriod(period)}
+        </Text>
+
+        <View style={styles.periodActions}>
+          <Pressable
+            onPress={onEdit}
+            accessibilityRole="button"
+            accessibilityLabel="Modifier la période"
+            style={({ pressed }) => [
+              styles.iconButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons
+              name="pencil-outline"
+              size={17}
+              color={colors.textSecondary}
+            />
+          </Pressable>
+
+          <Pressable
+            onPress={onDelete}
+            accessibilityRole="button"
+            accessibilityLabel="Supprimer la période"
+            style={({ pressed }) => [
+              styles.iconButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={17}
+              color={colors.textSecondary}
+            />
+          </Pressable>
         </View>
       </View>
+    );
+  }
 
-      <Text style={styles.sideDescription}>Disponibilités renseignées</Text>
-
-      <View style={styles.participantsList}>
-        {PARTICIPANTS.map(participant => (
-          <View key={participant.name} style={styles.participantRow}>
-            <View
-              style={[
-                styles.avatar,
-                { backgroundColor: participant.color },
-              ]}
-            >
-              <Text style={styles.avatarText}>{participant.initials}</Text>
-            </View>
-
-            <View style={styles.participantIdentity}>
-              <Text style={styles.participantName}>
-                {participant.name}
-                {participant.isCurrentUser ? ' (vous)' : ''}
-              </Text>
-              <Text style={styles.participantStatus}>Saisie terminée</Text>
-            </View>
-
-            <Ionicons
-              name="checkmark-circle"
-              size={19}
-              color={colors.secondary}
-            />
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function SynthesisPanel({ hasPeriods }: { hasPeriods: boolean }) {
-  return (
-    <View style={styles.desktopSynthesisCard}>
-      <Text style={styles.sideHeading}>Synthèse</Text>
-
-      <View style={styles.synthesisList}>
-        <SynthesisItem
-          icon="calendar-outline"
-          title={hasPeriods ? '2 périodes communes' : 'Aucune période'}
-          detail={hasPeriods ? 'identifiées' : 'sur ce mois'}
+  function LegendItem({
+    color,
+    label,
+  }: {
+    color: string;
+    label: string;
+  }) {
+    return (
+      <View style={styles.legendItem}>
+        <View
+          style={[
+            styles.legendColor,
+            { backgroundColor: color },
+          ]}
         />
-        <SynthesisItem
-          icon="time-outline"
-          title={hasPeriods ? 'Durée idéale' : 'Durée indisponible'}
-          detail={hasPeriods ? '5 à 7 jours' : 'Changez de mois'}
-        />
-        <SynthesisItem
-          icon="people-outline"
-          title={hasPeriods ? 'Tout le groupe' : 'Aucun résultat'}
-          detail={
-            hasPeriods
-              ? 'peut partir sur ces périodes'
-              : 'pour le mois affiché'
-          }
-        />
+        <Text style={styles.legendLabel}>{label}</Text>
       </View>
-    </View>
-  );
-}
+    );
+  }
 
-function SynthesisItem({
-  icon,
-  title,
-  detail,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  detail: string;
-}) {
-  return (
-    <View style={styles.synthesisItem}>
-      <View style={styles.synthesisIcon}>
-        <Ionicons name={icon} size={20} color={colors.secondary} />
-      </View>
-      <View style={styles.synthesisText}>
-        <Text style={styles.synthesisTitle}>{title}</Text>
-        <Text style={styles.synthesisDetail}>{detail}</Text>
-      </View>
-    </View>
-  );
-}
+  function formatShortDate(value: string) {
+    const date = parseDate(value);
 
-function CalendarLegend() {
-  return (
-    <View style={styles.legend}>
-      <LegendItem color="#A7E2C2" label="Disponible" />
-      <LegendItem color="#16A879" label="Partiel" />
-      <LegendItem color="#EF5B5B" label="Indisponible" />
-    </View>
-  );
-}
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+    });
+  }
 
-function MobileCommonSummary() {
-  return (
-    <View style={styles.commonSummary}>
-      <View style={styles.summaryIcon}>
-        <Ionicons
-          name="checkmark-circle-outline"
-          size={23}
-          color={colors.secondary}
-        />
-      </View>
-      <View style={styles.summaryText}>
-        <Text style={styles.summaryValue}>2 périodes communes</Text>
-        <Text style={styles.summaryLabel}>
-          identifiées pour tous les participants
-        </Text>
-      </View>
-    </View>
-  );
-}
+  function formatPeriod(period: AvailabilityPeriod) {
+    const start = parseDate(period.startDate);
+    const end = parseDate(period.endDate);
 
-function PrimaryButton({
-  mode,
-  onPress,
-}: {
-  mode: 'mine' | 'common';
-  onPress?: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [
-        styles.primaryButton,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text style={styles.primaryButtonText}>
-        {mode === 'mine'
-          ? 'Enregistrer mes disponibilités'
-          : 'Utiliser ces dates pour proposer des destinations'}
-      </Text>
-      <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-    </Pressable>
-  );
-}
+    if (
+      start.getMonth() === end.getMonth() &&
+      start.getFullYear() === end.getFullYear()
+    ) {
+      const month = end.toLocaleDateString('fr-FR', {
+        month: 'long',
+      });
 
-function ResetMonthButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Revenir au mois actuel"
-      style={({ pressed }) => [
-        styles.resetMonthButton,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text style={styles.resetMonthText}>Revenir à aujourd’hui</Text>
-    </Pressable>
-  );
-}
+      return `${start.getDate()} – ${end.getDate()} ${month} ${end.getFullYear()}`;
+    }
 
-function MonthButton({
-  icon,
-  label,
-  onPress,
-}: {
-  icon: 'chevron-back' | 'chevron-forward';
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        styles.monthButton,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Ionicons name={icon} size={20} color={colors.textSecondary} />
-    </Pressable>
-  );
-}
+    return `${formatDate(start)} – ${formatDate(end)}`;
+  }
 
-function LegendItem({ color, label }: { color: string; label: string }) {
-  return (
-    <View style={styles.legendItem}>
-      <View style={[styles.legendColor, { backgroundColor: color }]} />
-      <Text style={styles.legendLabel}>{label}</Text>
-    </View>
-  );
-}
+  function parseDate(value: string) {
+    const [year, month, day] = value.split('-').map(Number);
 
-const styles = StyleSheet.create({
-  wrapper: { width: '100%' },
-  desktopWrapper: { width: '100%', maxWidth: 760, alignSelf: 'center' },
-  desktopCommonLayout: {
-    width: '100%',
-    flexDirection: 'row',
+    return new Date(year, month - 1, day);
+  }
+
+  function formatDate(date: Date) {
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+
+  const styles = StyleSheet.create({
+    wrapper: {
+      width: '100%',
+    },
+
+    desktopWrapper: {
+      width: '100%',
+      maxWidth: 820,
+      alignSelf: 'center',
+    },
+
+    calendarCard: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      paddingBottom: spacing.md,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.lg,
+    },
+
+    monthHeader: {
+      minHeight: 42,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+
+    monthButton: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.full,
+    },
+
+    monthTitle: {
+      color: colors.textPrimary,
+      fontSize: 16,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    weekRow: {
+      marginTop: spacing.lg,
+      flexDirection: 'row',
+    },
+
+    weekday: {
+      width: '14.2857%',
+      color: colors.textMuted,
+      fontSize: 10,
+      fontFamily: typography.fontFamily.semibold,
+      textAlign: 'center',
+    },
+
+    daysGrid: {
+      marginTop: spacing.md,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+
+    dayCell: {
+    width: '14.2857%',
+    height: 48,
     alignItems: 'stretch',
-    gap: spacing.lg,
-  },
-  desktopParticipantsCard: {
-    width: 230,
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-  },
-  desktopCenterPanel: {
-    flex: 1,
-    minWidth: 0,
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-  },
-  desktopSideColumn: { width: 280, gap: spacing.lg },
-  desktopSynthesisCard: {
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-  },
-  decorativeCard: {
-    flex: 1,
-    minHeight: 170,
-    padding: spacing.lg,
-    alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3F7FF',
-    borderRadius: radius.lg,
   },
-  decorativeIcon: {
-    width: 64,
-    height: 64,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#E4EDFF',
-    borderRadius: radius.full,
-  },
-  decorativeTitle: {
-    marginTop: spacing.md,
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  decorativeText: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  panelHeadingBlock: { marginBottom: spacing.lg },
-  panelHeading: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.lg,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  panelDescription: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
-  },
-  participantsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sideHeading: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.md,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  sideDescription: {
-    marginTop: spacing.xs,
-    color: colors.textMuted,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
-  },
-  countBadge: {
-    minWidth: 28,
-    height: 28,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#EAF1FF',
-    borderRadius: radius.full,
-  },
-  countBadgeText: {
-    color: colors.primary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  participantsList: { marginTop: spacing.lg, gap: spacing.lg },
-  participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  avatar: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.full,
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  participantIdentity: { flex: 1, minWidth: 0 },
-  participantName: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  participantStatus: {
-    marginTop: 2,
-    color: colors.secondary,
-    fontSize: 10,
-    fontFamily: typography.fontFamily.regular,
-  },
-  synthesisList: { marginTop: spacing.lg, gap: spacing.xl },
-  synthesisItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  synthesisIcon: {
-    width: 40,
+
+  day: {
+    width: '100%',
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ECF9F4',
-    borderRadius: radius.full,
   },
-  synthesisText: { flex: 1 },
-  synthesisTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  synthesisDetail: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
-    lineHeight: 17,
-  },
-  calendarCard: {
-    padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-  },
-  desktopCalendarCard: {
-    width: '100%',
-    maxWidth: 580,
-    alignSelf: 'center',
-  },
-  monthHeader: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  monthButton: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.full,
-  },
-  monthTitle: {
-    color: colors.textPrimary,
-    fontSize: 19,
-    fontFamily: typography.fontFamily.bold,
-  },
-  weekRow: { marginTop: spacing.lg, flexDirection: 'row' },
-  weekday: {
-    width: '14.2857%',
-    color: colors.textMuted,
-    fontSize: 11,
-    fontFamily: typography.fontFamily.semibold,
-    textAlign: 'center',
-  },
-  daysGrid: {
-    marginTop: spacing.sm,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: '14.2857%',
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.sm,
-  },
-  mobileDayButton: { width: 40, height: 38 },
-  desktopDayButton: { width: 54, height: 34 },
-  dayText: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  availableDay: { backgroundColor: '#CBEFD9' },
-  partialDay: { backgroundColor: '#16A879' },
-  unavailableDay: { backgroundColor: '#FDE1E1' },
-  strongDayText: {
-    color: '#FFFFFF',
-    fontFamily: typography.fontFamily.semibold,
-  },
-  unavailableDayText: { color: colors.error },
-  legend: {
-    marginTop: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.lg,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  legendColor: { width: 13, height: 13, borderRadius: 4 },
-  legendLabel: {
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.medium,
-  },
-  resetMonthButton: {
-    alignSelf: 'center',
-    marginTop: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: '#EAF1FF',
-    borderRadius: radius.full,
-  },
-  resetMonthText: {
-    color: colors.primary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  commonSummary: {
-    marginTop: spacing.xl,
-    padding: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: '#F0FAF6',
-    borderWidth: 1,
-    borderColor: '#CDEBDD',
-    borderRadius: radius.lg,
-  },
-  summaryIcon: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: radius.full,
-  },
-  summaryText: { flex: 1 },
-  summaryValue: {
-    color: colors.textPrimary,
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  summaryLabel: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.xs,
-    fontFamily: typography.fontFamily.regular,
-  },
-  primaryButton: {
-    minHeight: 50,
-    marginTop: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.semibold,
-  },
-  pressed: { 
-    opacity: 0.72 
-  },
-  desktopMinePanel: {
-  width: '100%',
-  maxWidth: 1050,
-  alignSelf: 'center',
-  padding: spacing.xl,
-  backgroundColor: colors.surface,
-  borderWidth: 1,
-  borderColor: colors.border,
-  borderRadius: radius.xl,
-},
 
-mineHeader: {
-  marginBottom: spacing.xxl,
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: spacing.xl,
-},
+  selectedDay: {
+    backgroundColor: '#16A879',
+    borderRadius: 0,
+  },
 
-mineHeaderText: {
-  flex: 1,
-  gap: spacing.xs,
-},
+  selectedStartDay: {
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+  },
 
-daysBadge: {
-  paddingHorizontal: spacing.lg,
-  paddingVertical: spacing.md,
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: spacing.sm,
-  backgroundColor: '#ECF9F4',
-  borderWidth: 1,
-  borderColor: '#C7EBDD',
-  borderRadius: radius.md,
-},
+  selectedEndDay: {
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
+  },
 
-daysBadgeValue: {
-  color: colors.textPrimary,
-  fontSize: typography.fontSize.sm,
-  fontFamily: typography.fontFamily.semibold,
-},
+    dayText: {
+      color: colors.textPrimary,
+      fontSize: 13,
+      fontFamily: typography.fontFamily.medium,
+    },
 
-daysBadgeLabel: {
-  marginTop: 2,
-  color: colors.textSecondary,
-  fontSize: typography.fontSize.xs,
-  fontFamily: typography.fontFamily.regular,
-},
+    availableDay: {
+      backgroundColor: '#BFEAD2',
+    },
 
-mineWorkspace: {
-  marginBottom: spacing.xxl,
-  flexDirection: 'row',
-  alignItems: 'stretch',
-  justifyContent: 'center',
-  gap: spacing.xl,
-},
+    availableDayText: {
+      color: '#146B50',
+      fontFamily: typography.fontFamily.semibold,
+    },
 
-mineCalendarColumn: {
-  width: 620,
-  gap: spacing.lg,
-},
+    selectedDayText: {
+      color: '#FFFFFF',
+      fontFamily: typography.fontFamily.semibold,
+    },
 
-mineHelpCard: {
-  width: 280,
-  padding: spacing.xl,
-  backgroundColor: '#F4F7FD',
-  borderWidth: 1,
-  borderColor: '#DCE6F5',
-  borderRadius: radius.lg,
-},
+    legend: {
+      marginTop: spacing.md,
+      paddingTop: spacing.sm,
+      flexDirection: 'row',
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
 
-mineHelpIcon: {
-  width: 48,
-  height: 48,
-  marginBottom: spacing.lg,
-  alignItems: 'center',
-  justifyContent: 'center',
-  backgroundColor: '#E4EDFF',
-  borderRadius: radius.full,
-},
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
 
-mineHelpTitle: {
-  color: colors.textPrimary,
-  fontSize: typography.fontSize.md,
-  fontFamily: typography.fontFamily.semibold,
-},
+    legendColor: {
+      width: 10,
+      height: 10,
+      borderRadius: 3,
+    },
 
-mineHelpDescription: {
-  marginTop: spacing.sm,
-  marginBottom: spacing.xl,
-  color: colors.textSecondary,
-  fontSize: typography.fontSize.sm,
-  fontFamily: typography.fontFamily.regular,
-  lineHeight: 20,
-},
+    legendLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      fontFamily: typography.fontFamily.regular,
+    },
 
-helpItem: {
-  marginTop: spacing.lg,
-  flexDirection: 'row',
-  alignItems: 'center',
-  gap: spacing.md,
-},
+    periodsSection: {
+      marginTop: spacing.lg,
+    },
 
-helpColor: {
-  width: 14,
-  height: 14,
-  flexShrink: 0,
-  borderRadius: radius.sm,
-},
+    commonSection: {
+      marginTop: spacing.lg,
+    },
 
-helpLabel: {
-  color: colors.textPrimary,
-  fontSize: typography.fontSize.sm,
-  fontFamily: typography.fontFamily.medium,
-},
+    addButtonDisabled: {
+      opacity: 0.45,
+    },
 
-helpDetail: {
-  marginTop: 2,
-  color: colors.textMuted,
-  fontSize: typography.fontSize.xs,
-  fontFamily: typography.fontFamily.regular,
-},
-});
+    sectionTitle: {
+      color: colors.textPrimary,
+      fontSize: 15,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    periodsList: {
+      marginTop: spacing.md,
+      gap: spacing.sm,
+    },
+
+    periodRow: {
+      minHeight: 46,
+      paddingHorizontal: spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+    },
+
+    cancelEditButton: {
+      alignSelf: 'center',
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+    },
+
+    cancelEditText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontFamily: typography.fontFamily.medium,
+    },
+
+    periodText: {
+      flex: 1,
+      color: colors.textPrimary,
+      fontSize: 12,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    periodActions: {
+      flexDirection: 'row',
+      gap: 4,
+    },
+
+    monthSelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+    },
+
+    datePicker: {
+      marginTop: spacing.md,
+      padding: spacing.md,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+    },
+
+    pickerLabel: {
+      marginBottom: spacing.sm,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    yearGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginBottom: spacing.lg,
+    },
+
+    yearButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      backgroundColor: colors.surfaceMuted,
+    },
+
+    monthGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+
+    monthPickerButton: {
+      width: '22%',
+      paddingVertical: spacing.sm,
+      alignItems: 'center',
+      borderRadius: radius.md,
+      backgroundColor: colors.surfaceMuted,
+    },
+
+    pickerButtonActive: {
+      backgroundColor: colors.primary,
+    },
+
+    pickerButtonText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontFamily: typography.fontFamily.medium,
+    },
+
+    pickerButtonTextActive: {
+      color: '#FFFFFF',
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    iconButton: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.full,
+    },
+
+    emptyCard: {
+      marginTop: spacing.md,
+      minHeight: 52,
+      paddingHorizontal: spacing.md,
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      backgroundColor: colors.surface,
+    },
+
+    emptyText: {
+      marginTop: spacing.md,
+      color: colors.textMuted,
+      fontSize: 14,
+      fontFamily: typography.fontFamily.regular,
+    },
+
+    addButton: {
+      minHeight: 48,
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.primary,
+      borderRadius: radius.full,
+    },
+
+    addButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    primaryButton: {
+      minHeight: 48,
+      marginTop: spacing.lg,
+      paddingHorizontal: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.primary,
+      borderRadius: radius.md,
+    },
+
+    primaryButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    overlay: {
+      flex: 1,
+      padding: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(30, 41, 59, 0.38)',
+    },
+
+    modalCard: {
+      width: '100%',
+      maxWidth: 440,
+      overflow: 'hidden',
+      backgroundColor: colors.surface,
+      borderRadius: 22,
+    },
+
+    modalHeader: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+
+    modalTitle: {
+      color: colors.textPrimary,
+      fontSize: 19,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    closeButton: {
+      width: 38,
+      height: 38,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.full,
+    },
+
+    form: {
+      padding: spacing.lg,
+      gap: spacing.md,
+    },
+
+    errorText: {
+      color: colors.error,
+      fontSize: 11,
+      fontFamily: typography.fontFamily.medium,
+    },
+
+    saveButton: {
+      minHeight: 48,
+      marginTop: spacing.sm,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: radius.md,
+    },
+
+    saveButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    pressed: {
+      opacity: 0.72,
+    },
+  });

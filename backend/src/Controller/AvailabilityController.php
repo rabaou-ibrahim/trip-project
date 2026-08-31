@@ -91,6 +91,31 @@ final class AvailabilityController extends AbstractController
             );
         }
 
+        $existingAvailabilities = $entityManager
+        ->getRepository(Availability::class)
+        ->findBy([
+            'tripProject' => $tripProject,
+            'user' => $user,
+        ]);
+
+    foreach ($existingAvailabilities as $existingAvailability) {
+        $existingStart = $existingAvailability->getStartDate();
+        $existingEnd = $existingAvailability->getEndDate();
+
+        $overlaps =
+            $startDate <= $existingEnd &&
+            $endDate >= $existingStart;
+
+        if ($overlaps) {
+            return $this->json(
+                [
+                    'message' => 'Cette période chevauche une disponibilité déjà enregistrée.',
+                ],
+                Response::HTTP_CONFLICT
+            );
+        }
+    }
+
         $availability = new Availability();
 
         $availability
@@ -100,6 +125,10 @@ final class AvailabilityController extends AbstractController
             ->setEndDate($endDate);
 
         $entityManager->persist($availability);
+
+        $tripProject->setAvailabilitiesStepCompleted(false);
+        $tripProject->setUpdatedAt(new \DateTimeImmutable());
+
         $entityManager->flush();
 
         return $this->json(
@@ -171,6 +200,7 @@ final class AvailabilityController extends AbstractController
             $result[] = [
                 'id' => $availability->getId(),
                 'userId' => $availabilityUser->getId(),
+                'isCurrentUser' => $availabilityUser->getId() === $user->getId(),
                 'username' => $availabilityUser->getUsername(),
                 'firstname' => $availabilityUser->getFirstname(),
                 'lastname' => $availabilityUser->getLastname(),
@@ -370,6 +400,11 @@ final class AvailabilityController extends AbstractController
             ->setEndDate($endDate)
             ->setUpdatedAt(new \DateTimeImmutable());
 
+        $tripProject = $availability->getTripProject();
+
+        $tripProject->setAvailabilitiesStepCompleted(false);
+        $tripProject->setUpdatedAt(new \DateTimeImmutable());
+
         $entityManager->flush();
 
         return $this->json([
@@ -409,6 +444,11 @@ final class AvailabilityController extends AbstractController
                 Response::HTTP_FORBIDDEN
             );
         }
+
+        $tripProject = $availability->getTripProject();
+
+        $tripProject->setAvailabilitiesStepCompleted(false);
+        $tripProject->setUpdatedAt(new \DateTimeImmutable());
 
         $entityManager->remove($availability);
         $entityManager->flush();
