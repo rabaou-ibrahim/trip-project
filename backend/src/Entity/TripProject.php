@@ -23,6 +23,9 @@ class TripProject
     #[ORM\Column(length: 30)]
     private ?string $status = null;
 
+    #[ORM\Column(options: ['default' => false])]
+    private bool $availabilitiesStepCompleted = false;
+
     #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $startDate = null;
 
@@ -171,6 +174,18 @@ class TripProject
     public function setParticipantsStepCompleted(bool $participantsStepCompleted): static
     {
         $this->participantsStepCompleted = $participantsStepCompleted;
+
+        return $this;
+    }
+
+    public function isAvailabilitiesStepCompleted(): bool
+    {
+        return $this->availabilitiesStepCompleted;
+    }
+
+    public function setAvailabilitiesStepCompleted(bool $availabilitiesStepCompleted): static
+    {
+        $this->availabilitiesStepCompleted = $availabilitiesStepCompleted;
 
         return $this;
     }

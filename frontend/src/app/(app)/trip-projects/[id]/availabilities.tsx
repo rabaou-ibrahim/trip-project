@@ -306,7 +306,10 @@ export default function TripProjectAvailabilitiesScreen() {
           onDeletePeriod={handleDeletePeriod}
           onPrimaryAction={() => {
             if (activeTab === 'common') {
-              console.log('Proposer des destinations');
+              router.push({
+                pathname: '/trip-projects/[id]/destinations',
+                params: { id },
+              });
             }
           }}
         />
@@ -354,7 +357,7 @@ export default function TripProjectAvailabilitiesScreen() {
 
             <Text style={styles.completeStepText}>
               {availabilitiesStepCompleted
-                ? 'Cette étape est terminée. Vous pouvez maintenant consulter les périodes communes.'
+                ? 'Chaque participant a ajouté ses disponibilités. Vous pouvez maintenant passer aux disponibilités ou encore modifier les vôtres.'
                 : 'Validez cette étape lorsque chaque participant a renseigné au moins une période.'}
             </Text>
 

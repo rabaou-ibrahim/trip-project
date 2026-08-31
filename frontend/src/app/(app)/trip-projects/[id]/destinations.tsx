@@ -9,11 +9,17 @@ import {
   useWindowDimensions,
   View,
   Alert,
+  Image,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getTripProject } from '@/services/tripProjectService';
 import type { TripProjectDetail } from '@/types/tripProject';
+import {
+  searchDestinations,
+  getDestinationPhoto,
+  type DestinationSearchResult,
+} from '@/services/destinationSearchService';
 
 import { DesktopSidebar } from '@/components/navigation/DesktopSidebar';
 import { MobileBottomNavigation } from '@/components/navigation/MobileBottomNavigation';
@@ -24,7 +30,6 @@ import {
 import { colors, radius, spacing, typography } from '@/theme';
 import { apiRequest } from '@/services/apiClient';
 import { ApiError } from '@/services/apiClient';
-import { getDestinationProposals } from '@/services/destinationProposalService';
 
 const DESKTOP_BREAKPOINT = 1024;
 
@@ -48,6 +53,15 @@ export default function DestinationsScreen() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [city, setCity] = useState('');
   const [country, setCountry] = useState('');
+  const [destinationResults, setDestinationResults] = useState<
+    DestinationSearchResult[]
+  >([]);
+
+  const [selectedDestination, setSelectedDestination] =
+    useState<DestinationSearchResult | null>(null);
+
+  const [isSearchingDestination, setIsSearchingDestination] =
+    useState(false);
   const [description, setDescription] = useState('');
   const [estimatedCost, setEstimatedCost] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -61,6 +75,9 @@ export default function DestinationsScreen() {
   const [project, setProject] = useState<TripProjectDetail | null>(null);
   const [isClosingVote, setIsClosingVote] = useState(false);
   const [closeVoteError, setCloseVoteError] = useState<string | null>(null);
+  const [tiedProposals, setTiedProposals] = useState<
+    { id: number; city: string; country: string; votes: number }[]
+  >([]);
 
   useEffect(() => {
     const load = async () => {
@@ -86,6 +103,30 @@ export default function DestinationsScreen() {
     void load();
   }, [tripProjectId]);
 
+  useEffect(() => {
+  if (city.trim().length < 2 || selectedDestination) {
+    setDestinationResults([]);
+    return;
+  }
+
+  const timeout = setTimeout(async () => {
+    try {
+      setIsSearchingDestination(true);
+
+      const results = await searchDestinations(city.trim());
+
+      setDestinationResults(results);
+    } catch (error) {
+      console.error('DESTINATION SEARCH ERROR:', error);
+      setDestinationResults([]);
+    } finally {
+      setIsSearchingDestination(false);
+    }
+  }, 350);
+
+  return () => clearTimeout(timeout);
+}, [city, selectedDestination]);
+
   const loadProposals = async () => {
     if (!tripProjectId) {
       return;
@@ -95,25 +136,23 @@ export default function DestinationsScreen() {
       `/api/trip-projects/${tripProjectId}/destination-proposals`,
     );
 
-    const mappedProposals: DestinationProposal[] = await Promise.all(
-      data.map(async (proposal) => ({
-        id: String(proposal.id),
-        city: proposal.city,
-        country: proposal.country,
-        estimatedBudget: Number(proposal.estimatedCost ?? 0),
-        votes: proposal.votes,
-        hasVoted: proposal.hasVoted,
+    const mappedProposals: DestinationProposal[] = data.map((proposal) => ({
+      id: String(proposal.id),
+      city: proposal.city,
+      country: proposal.country,
+      estimatedBudget: Number(proposal.estimatedCost ?? 0),
+      votes: proposal.votes,
+      hasVoted: proposal.hasVoted,
 
-        flagUrl: getCountryFlagUrl(proposal.country),
+      flagUrl: proposal.countryCode
+      ? `https://flagcdn.com/w80/${proposal.countryCode.toLowerCase()}.png`
+      : undefined,
 
-        imageUrl: await getDestinationImage(
-          proposal.city,
-        ),
+      imageUrl: proposal.imageUrl ?? undefined,
 
-        accentColor: '#2563EB',
-        accentSoftColor: '#EAF1FF',
-      })),
-    );
+      accentColor: '#2563EB',
+      accentSoftColor: '#EAF1FF',
+    }));
 
     setProposals(mappedProposals);
   };
@@ -196,6 +235,10 @@ export default function DestinationsScreen() {
     try {
       setIsCreating(true);
       setCreateError(null);
+      const photo = await getDestinationPhoto(
+        city.trim(),
+        country.trim(),
+      );
 
       await apiRequest(
         `/api/trip-projects/${tripProjectId}/destination-proposals`,
@@ -204,11 +247,16 @@ export default function DestinationsScreen() {
           body: {
             city: city.trim(),
             country: country.trim(),
+            countryCode: selectedDestination?.countryCode ?? null,
             description: description.trim(),
             estimatedCost:
               estimatedCost.trim() !== ''
                 ? estimatedCost.trim()
                 : null,
+
+            latitude: selectedDestination?.latitude ?? null,
+            longitude: selectedDestination?.longitude ?? null,
+            imageUrl: photo.imageUrl,
           },
         },
       );
@@ -219,6 +267,8 @@ export default function DestinationsScreen() {
       setCountry('');
       setDescription('');
       setEstimatedCost('');
+      setSelectedDestination(null);
+      setDestinationResults([]);
       setIsAddModalOpen(false);
     } catch (error) {
       setCreateError(
@@ -250,7 +300,7 @@ export default function DestinationsScreen() {
     }
   };
 
-  const handleCloseVote = async () => {
+const handleCloseVote = async () => {
   if (
     !tripProjectId ||
     isClosingVote ||
@@ -262,6 +312,7 @@ export default function DestinationsScreen() {
   try {
     setIsClosingVote(true);
     setCloseVoteError(null);
+    setTiedProposals([]);
 
     await apiRequest(
       `/api/trip-projects/${tripProjectId}/close-destination-vote`,
@@ -275,6 +326,15 @@ export default function DestinationsScreen() {
       loadProject(),
     ]);
   } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.data?.tie === true &&
+      Array.isArray(error.data?.proposals)
+    ) {
+      setTiedProposals(error.data.proposals);
+      return;
+    }
+
     setCloseVoteError(
       error instanceof ApiError
         ? error.message
@@ -282,6 +342,37 @@ export default function DestinationsScreen() {
     );
   } finally {
     setIsClosingVote(false);
+  }
+};
+
+const handleSelectTieWinner = async (proposalId: number) => {
+  if (!tripProjectId) return;
+
+  try {
+    setCloseVoteError(null);
+
+    await apiRequest(
+      `/api/trip-projects/${tripProjectId}/select-destination`,
+      {
+        method: 'PATCH',
+        body: {
+          destinationProposalId: proposalId,
+        },
+      },
+    );
+
+    setTiedProposals([]);
+
+    await Promise.all([
+      loadProposals(),
+      loadProject(),
+    ]);
+  } catch (error) {
+    setCloseVoteError(
+      error instanceof ApiError
+        ? error.message
+        : 'Impossible de sélectionner la destination.',
+    );
   }
 };
 
@@ -385,9 +476,19 @@ const filteredProposals = proposals
         {summaryProposal.city}
       </Text>
 
-      <Text style={styles.summaryCountry}>
-        {summaryProposal.flagUrl} {summaryProposal.country}
-      </Text>
+      <View style={styles.summaryCountryRow}>
+        {summaryProposal.flagUrl && (
+          <Image
+            source={{ uri: summaryProposal.flagUrl }}
+            style={styles.summaryFlag}
+            resizeMode="cover"
+          />
+        )}
+
+        <Text style={styles.summaryCountry}>
+          {summaryProposal.country}
+        </Text>
+      </View>
 
       <View style={styles.summaryDivider} />
 
@@ -470,12 +571,14 @@ const filteredProposals = proposals
 
       <View style={[styles.header, isDesktop && styles.desktopHeader]}>
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>VACANCES ÉTÉ 2027</Text>
+          <Text style={styles.eyebrow}>
+            {project?.title?.toUpperCase() ?? 'VOYAGE'}
+          </Text>
           <Text style={[styles.title, isDesktop && styles.desktopTitle]}>
             Destinations proposées
           </Text>
           <Text style={styles.subtitle}>
-            {proposals.length} propositions · Votez pour votre destination préférée.
+            {proposals.length} propositions · Votez pour votre destination préférée. Vous pouvez également en ajouter
           </Text>
         </View>
 
@@ -514,7 +617,7 @@ const filteredProposals = proposals
     <Ionicons name="add" size={18} color="#FFFFFF" />
 
     <Text style={styles.addDestinationButtonText}>
-      Proposer une destination
+      Ajouter une destination
     </Text>
   </Pressable>
 
@@ -568,6 +671,35 @@ const filteredProposals = proposals
         {project.selectedDestination.country}
       </Text>
     </View>
+  </View>
+)}
+
+{tiedProposals.length > 0 && (
+  <View style={styles.tieBox}>
+    <Text style={styles.tieTitle}>
+      Égalité
+    </Text>
+
+    <Text style={styles.tieText}>
+      Choisissez la destination finale parmi les ex æquo :
+    </Text>
+
+    {tiedProposals.map((proposal) => (
+      <Pressable
+        key={proposal.id}
+        onPress={() => void handleSelectTieWinner(proposal.id)}
+        style={styles.tieProposal}
+      >
+        <View>
+          <Text style={styles.tieCity}>{proposal.city}</Text>
+          <Text style={styles.tieCountry}>{proposal.country}</Text>
+        </View>
+
+        <Text style={styles.tieVotes}>
+          {proposal.votes} votes
+        </Text>
+      </Pressable>
+    ))}
   </View>
 )}
 
@@ -721,23 +853,8 @@ const filteredProposals = proposals
     </>
   );
 
-  if (isDesktop) {
-    return (
-      <View style={styles.desktopPage}>
-        <DesktopSidebar activeItem="trips" />
-
-        <ScrollView
-          style={styles.desktopScroll}
-          contentContainerStyle={styles.desktopScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {pageContent}
-        </ScrollView>
-      </View>
-    );
-  }
-
-  <Modal
+  const addDestinationModal = (
+<Modal
     visible={isAddModalOpen}
     transparent
     animationType="fade"
@@ -757,7 +874,7 @@ const filteredProposals = proposals
             </Text>
 
             <Text style={styles.modalTitle}>
-              Proposer une destination
+              Ajouter une destination
             </Text>
           </View>
 
@@ -774,24 +891,81 @@ const filteredProposals = proposals
         </View>
 
         <View style={styles.modalForm}>
-          <Text style={styles.inputLabel}>Ville</Text>
+          <Text style={styles.inputLabel}>Destination</Text>
 
           <TextInput
             value={city}
-            onChangeText={setCity}
-            placeholder="Ex. Tokyo"
+            onChangeText={(value) => {
+              setCity(value);
+              setCountry('');
+              setSelectedDestination(null);
+            }}
+            placeholder="Rechercher une ville..."
             placeholderTextColor={colors.textMuted}
+            autoComplete="off"
             style={styles.input}
           />
+
+          {isSearchingDestination && (
+            <Text style={styles.destinationSearchStatus}>
+              Recherche...
+            </Text>
+          )}
+
+          {destinationResults.length > 0 && (
+            <View style={styles.destinationResults}>
+              {destinationResults.map((destination) => (
+                <Pressable
+                  key={destination.id}
+                  onPress={() => {
+                    setSelectedDestination(destination);
+                    setCity(destination.city);
+                    setCountry(destination.country ?? '');
+                    setDestinationResults([]);
+                  }}
+                  style={({ pressed }) => [
+                    styles.destinationResult,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Ionicons
+                    name="location-outline"
+                    size={18}
+                    color={colors.primary}
+                  />
+
+                  <View style={styles.destinationResultText}>
+                    <Text style={styles.destinationResultCity}>
+                      {destination.city}
+                    </Text>
+
+                    <Text style={styles.destinationResultCountry}>
+                      {[destination.admin1, destination.country]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </Text>
+                  </View>
+                  {destination.countryCode && (
+                    <Text style={styles.destinationCode}>
+                      {destination.countryCode}
+                    </Text>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          )}
 
           <Text style={styles.inputLabel}>Pays</Text>
 
           <TextInput
             value={country}
-            onChangeText={setCountry}
-            placeholder="Ex. Japon"
+            editable={false}
+            placeholder="Sélectionnez d’abord une destination"
             placeholderTextColor={colors.textMuted}
-            style={styles.input}
+            style={[
+              styles.input,
+              styles.readonlyInput,
+            ]}
           />
 
           <Text style={styles.inputLabel}>
@@ -844,8 +1018,27 @@ const filteredProposals = proposals
       </View>
     </View>
   </Modal>
+  );
 
-  return (
+  if (isDesktop) {
+    return (
+      <View style={styles.desktopPage}>
+        <DesktopSidebar activeItem="trips" />
+
+        <ScrollView
+          style={styles.desktopScroll}
+          contentContainerStyle={styles.desktopScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {pageContent}
+        </ScrollView>
+
+        {addDestinationModal}
+      </View>
+    );
+  }
+
+   return (
     <View style={styles.mobilePage}>
       <ScrollView
         style={styles.mobileScroll}
@@ -856,135 +1049,10 @@ const filteredProposals = proposals
       </ScrollView>
 
       <MobileBottomNavigation activeItem="trips" />
+
+      {addDestinationModal}
     </View>
   );
-}
-
-function getDestinationImage(city: string): string | undefined {
-  const images: Record<string, string> = {
-    Paris:
-      'https://images.unsplash.com/photo-1502602898657-3e91760cbb34',
-    Tokyo:
-      'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf',
-    Rome:
-      'https://images.unsplash.com/photo-1552832230-c0197dd311b5',
-    Barcelone:
-      'https://images.unsplash.com/photo-1539037116277-4db20889f2d4',
-    Lisbonne:
-      'https://images.unsplash.com/photo-1555881400-74d7acaacd8b',
-    Marrakech:
-      'https://images.unsplash.com/photo-1597212618440-806262de4f6b',
-    Istanbul:
-      'https://images.unsplash.com/photo-1524231757912-21f4fe3a7200',
-    Londres:
-      'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad',
-    'New York':
-      'https://images.unsplash.com/photo-1485871981521-5b1fd3805eee',
-    Dubai:
-      'https://images.unsplash.com/photo-1512453979798-5ea266f8880c',
-    Bali:
-      'https://images.unsplash.com/photo-1537996194471-e657df975ab4',
-    Athènes:
-      'https://images.unsplash.com/photo-1555993539-1732b0258235',
-    Prague:
-      'https://images.unsplash.com/photo-1541849546-216549ae216d',
-    Budapest:
-      'https://images.unsplash.com/photo-1565426873118-a17ed65d74b9',
-    Bangkok:
-      'https://images.unsplash.com/photo-1508009603885-50cf7c579365',
-    Singapour:
-      'https://images.unsplash.com/photo-1525625293386-3f8f99389edd',
-    Sydney:
-      'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9',
-    'Le Cap':
-      'https://images.unsplash.com/photo-1580060839134-75a5edca2e99',
-  };
-
-  return images[city];
-}
-
-function getCountryFlagUrl(
-  country: string,
-): string | undefined {
-  const countryCodes: Record<string, string> = {
-    France: 'fr',
-    Espagne: 'es',
-    Portugal: 'pt',
-    Italie: 'it',
-    Grèce: 'gr',
-    Turquie: 'tr',
-    Allemagne: 'de',
-    Autriche: 'at',
-    Tchéquie: 'cz',
-    Hongrie: 'hu',
-    Pologne: 'pl',
-    Danemark: 'dk',
-    Suède: 'se',
-    Norvège: 'no',
-    Finlande: 'fi',
-    Islande: 'is',
-    Croatie: 'hr',
-    Serbie: 'rs',
-    Albanie: 'al',
-    'Royaume-Uni': 'gb',
-    Irlande: 'ie',
-
-    Maroc: 'ma',
-    Tunisie: 'tn',
-    Égypte: 'eg',
-    Sénégal: 'sn',
-    "Côte d'Ivoire": 'ci',
-    'Côte d’Ivoire': 'ci',
-    Ghana: 'gh',
-    Kenya: 'ke',
-    Tanzanie: 'tz',
-    'Afrique du Sud': 'za',
-
-    'Émirats arabes unis': 'ae',
-    Qatar: 'qa',
-    Oman: 'om',
-    Jordanie: 'jo',
-    'Arabie saoudite': 'sa',
-
-    Japon: 'jp',
-    'Corée du Sud': 'kr',
-    Chine: 'cn',
-    'Hong Kong': 'hk',
-    Taïwan: 'tw',
-
-    Thaïlande: 'th',
-    Vietnam: 'vn',
-    Indonésie: 'id',
-    Malaisie: 'my',
-    Singapour: 'sg',
-
-    Inde: 'in',
-    'Sri Lanka': 'lk',
-    Maldives: 'mv',
-
-    'États-Unis': 'us',
-    Canada: 'ca',
-    Mexique: 'mx',
-    Cuba: 'cu',
-    'République dominicaine': 'do',
-
-    Brésil: 'br',
-    Argentine: 'ar',
-    Pérou: 'pe',
-    Chili: 'cl',
-    Colombie: 'co',
-
-    Australie: 'au',
-    'Nouvelle-Zélande': 'nz',
-  };
-
-  const code = countryCodes[country];
-
-  if (!code) {
-    return undefined;
-  }
-
-  return `https://flagcdn.com/w80/${code}.png`;
 }
 
 const styles = StyleSheet.create({
@@ -1022,6 +1090,56 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radius.md,
   },
+
+  tieBox: {
+  marginTop: spacing.xl,
+  padding: spacing.lg,
+  backgroundColor: colors.surface,
+  borderWidth: 1,
+  borderColor: colors.border,
+  borderRadius: radius.lg,
+},
+
+tieTitle: {
+  color: colors.textPrimary,
+  fontSize: typography.fontSize.lg,
+  fontFamily: typography.fontFamily.bold,
+},
+
+tieText: {
+  marginTop: spacing.xs,
+  marginBottom: spacing.md,
+  color: colors.textSecondary,
+  fontSize: typography.fontSize.sm,
+},
+
+tieProposal: {
+  marginTop: spacing.sm,
+  padding: spacing.md,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  borderWidth: 1,
+  borderColor: colors.border,
+  borderRadius: radius.md,
+},
+
+tieCity: {
+  color: colors.textPrimary,
+  fontSize: typography.fontSize.sm,
+  fontFamily: typography.fontFamily.semibold,
+},
+
+tieCountry: {
+  color: colors.textSecondary,
+  fontSize: typography.fontSize.xs,
+},
+
+tieVotes: {
+  color: colors.primary,
+  fontSize: typography.fontSize.sm,
+  fontFamily: typography.fontFamily.semibold,
+},
 
   searchInput: {
     flex: 1,
@@ -1224,6 +1342,57 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+  destinationSearchStatus: {
+    marginTop: spacing.xs,
+    color: colors.textMuted,
+    fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily.regular,
+  },
+  destinationCode: {
+    color: colors.textMuted,
+    fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily.semibold,
+  },
+
+destinationResults: {
+  marginTop: spacing.xs,
+  overflow: 'hidden',
+  backgroundColor: colors.surface,
+  borderWidth: 1,
+  borderColor: colors.border,
+  borderRadius: radius.md,
+},
+
+destinationResult: {
+  padding: spacing.md,
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: spacing.sm,
+  borderBottomWidth: 1,
+  borderBottomColor: colors.border,
+},
+
+destinationResultText: {
+  flex: 1,
+},
+
+destinationResultCity: {
+  color: colors.textPrimary,
+  fontSize: typography.fontSize.sm,
+  fontFamily: typography.fontFamily.semibold,
+},
+
+destinationResultCountry: {
+  marginTop: 2,
+  color: colors.textSecondary,
+  fontSize: typography.fontSize.xs,
+  fontFamily: typography.fontFamily.regular,
+},
+
+readonlyInput: {
+  backgroundColor: colors.surfaceMuted,
+},
+
   errorText: {
     paddingVertical: spacing.xl,
     color: colors.error,
@@ -1268,6 +1437,24 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.fontSize.xs,
     fontFamily: typography.fontFamily.medium,
+  },
+  summaryCountryRow: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+
+  summaryFlag: {
+    width: 24,
+    height: 17,
+    borderRadius: 4,
+  },
+
+  summaryCountry: {
+    color: colors.textSecondary,
+    fontSize: typography.fontSize.sm,
+    fontFamily: typography.fontFamily.regular,
   },
   pressed: {
     opacity: 0.72,
@@ -1467,12 +1654,6 @@ disabledButton: {
     color: colors.textPrimary,
     fontSize: typography.fontSize.xl,
     fontFamily: typography.fontFamily.bold,
-  },
-  summaryCountry: {
-    marginTop: spacing.xs,
-    color: colors.textSecondary,
-    fontSize: typography.fontSize.sm,
-    fontFamily: typography.fontFamily.regular,
   },
   summaryDivider: {
     height: 1,

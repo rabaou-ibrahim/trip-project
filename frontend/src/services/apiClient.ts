@@ -30,6 +30,7 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly errors?: Record<string, string[]>,
+    public readonly data?: Record<string, any>,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -106,6 +107,9 @@ export async function apiRequest<T>(
       response.status,
       errorPayload?.message ?? 'Une erreur inattendue est survenue.',
       errorPayload?.errors,
+      payload && typeof payload === 'object'
+        ? payload as Record<string, any>
+        : undefined,
     );
   }
 

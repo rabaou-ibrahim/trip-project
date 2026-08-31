@@ -37,6 +37,15 @@ class DestinationProposal
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private ?TripProject $tripProject = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?float $latitude = null;
+
+    #[ORM\Column(length: 2, nullable: true)]
+    private ?string $countryCode = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?float $longitude = null;
+
     public function __construct() { 
         $this->createdAt = new \DateTimeImmutable(); 
     }
@@ -59,6 +68,18 @@ class DestinationProposal
 
     public function setCountry(string $country): static { 
         $this->country = $country; return $this;
+    }
+
+    public function getCountryCode(): ?string
+    {
+        return $this->countryCode;
+    }
+
+    public function setCountryCode(?string $countryCode): static
+    {
+        $this->countryCode = $countryCode;
+
+        return $this;
     }
 
     public function getDescription(): ?string { 
@@ -98,5 +119,44 @@ class DestinationProposal
 
     public function setTripProject(TripProject $tripProject): static { 
         $this->tripProject = $tripProject; return $this; 
+    }
+
+    #[ORM\Column(length: 2048, nullable: true)]
+    private ?string $imageUrl = null;
+
+    public function getImageUrl(): ?string
+    {
+        return $this->imageUrl;
+    }
+
+    public function setImageUrl(?string $imageUrl): static
+    {
+        $this->imageUrl = $imageUrl;
+
+        return $this;
+    }
+
+    public function getLatitude(): ?float
+    {
+        return $this->latitude;
+    }
+
+    public function setLatitude(?float $latitude): static
+    {
+        $this->latitude = $latitude;
+
+        return $this;
+    }
+
+    public function getLongitude(): ?float
+    {
+        return $this->longitude;
+    }
+
+    public function setLongitude(?float $longitude): static
+    {
+        $this->longitude = $longitude;
+
+        return $this;
     }
 }

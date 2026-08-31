@@ -22,7 +22,7 @@ import { TripProjectDetailBottomNavigation } from '@/components/navigation/TripP
 import { TripProjectHeader } from '@/components/trip-project-detail/TripProjectHeader';
 import { TripProjectParticipants } from '@/components/trip-project-detail/TripProjectParticipants';
 import { useAuth } from '@/contexts/AuthContext';
-import { ApiError } from '@/services/apiClient';
+import { ApiError, apiRequest } from '@/services/apiClient';
 import { getTripProject } from '@/services/tripProjectService';
 import { colors, radius, spacing, typography } from '@/theme';
 import type { TripProjectDetail } from '@/types/tripProject';
@@ -48,6 +48,8 @@ export default function TripProjectDetailScreen() {
   const rawId = Array.isArray(id) ? id[0] : id;
   const projectId = rawId && /^\d+$/.test(rawId) ? Number(rawId) : null;
   const [isDeleting, setIsDeleting] = useState(false);
+  const [hasCommonPeriods, setHasCommonPeriods] = useState(false);
+  const [hasDestinationProposals, setHasDestinationProposals] = useState(false);
 
   const loadTripProject = useCallback(async () => {
     if (projectId === null || projectId <= 0) {
@@ -61,7 +63,37 @@ export default function TripProjectDetailScreen() {
     setErrorMessage(null);
 
     try {
-      setTripProject(await getTripProject(projectId));
+      const project = await getTripProject(projectId);
+
+      setTripProject(project);
+
+      if (project.availabilitiesStepCompleted) {
+        try {
+          const response = await apiRequest<{
+            commonPeriods: {
+              startDate: string;
+              endDate: string;
+            }[];
+          }>(
+            `/api/trip-projects/${projectId}/common-availability`,
+          );
+
+          setHasCommonPeriods(response.commonPeriods.length > 0);
+        } catch {
+          setHasCommonPeriods(false);
+        }
+      } else {
+        setHasCommonPeriods(false);
+      }
+      try {
+        const proposals = await apiRequest<unknown[]>(
+          `/api/trip-projects/${projectId}/destination-proposals`,
+        );
+
+        setHasDestinationProposals(proposals.length > 0);
+      } catch {
+        setHasDestinationProposals(false);
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         await signOut();
@@ -92,9 +124,16 @@ export default function TripProjectDetailScreen() {
   const availabilitiesDone =
     tripProject?.availabilitiesStepCompleted ?? false;
 
+  const destinationSelected =
+  tripProject?.selectedDestination != null;
+
   const completedSteps =
     Number(participantsDone) +
-    Number(availabilitiesDone);
+    Number(availabilitiesDone) +
+    Number(hasCommonPeriods) +
+    Number(hasDestinationProposals) + // Destinations
+    Number(destinationSelected) +     // Vote
+    Number(destinationSelected);      // Destination finale
 
   const progressPercentage = Math.round(
     (completedSteps / 7) * 100,
@@ -230,18 +269,21 @@ export default function TripProjectDetailScreen() {
             <ProgressAnnouncement
               participantsDone={participantsDone}
               availabilitiesDone={availabilitiesDone}
+              hasCommonPeriods={hasCommonPeriods}
+              hasDestinationProposals={hasDestinationProposals}
+              destinationSelected={destinationSelected}
               onPress={() => {
                 if (!participantsDone) {
                   router.push(`/trip-projects/${tripProject.id}/participants`);
                   return;
                 }
 
-                if (!availabilitiesDone) {
+                if (!availabilitiesDone || !hasCommonPeriods) {
                   router.push(`/trip-projects/${tripProject.id}/availabilities`);
                   return;
                 }
 
-                router.push(`/trip-projects/${tripProject.id}/availabilities`);
+                router.push(`/trip-projects/${tripProject.id}/destinations`);
               }}
             />
 
@@ -285,7 +327,11 @@ export default function TripProjectDetailScreen() {
                 title="Périodes communes"
                 subtitle="Trouvez les dates compatibles"
                 status={
-                  availabilitiesDone ? 'current' : 'todo'
+                  hasCommonPeriods
+                    ? 'done'
+                    : availabilitiesDone
+                      ? 'current'
+                      : 'todo'
                 }
               />
 
@@ -297,11 +343,17 @@ export default function TripProjectDetailScreen() {
                     ? `${tripProject.selectedDestination.city}, ${tripProject.selectedDestination.country}`
                     : 'Choisissez où partir'
                 }
-                status="todo"
+                status={
+                  destinationSelected
+                    ? 'done'
+                    : hasDestinationProposals
+                      ? 'done'
+                      : hasCommonPeriods
+                        ? 'current'
+                        : 'todo'
+                }
                 onPress={() =>
-                  router.push(
-                    `/trip-projects/${tripProject.id}/destinations`,
-                  )
+                  router.push(`/trip-projects/${tripProject.id}/destinations`)
                 }
               />
 
@@ -309,21 +361,27 @@ export default function TripProjectDetailScreen() {
                 icon="heart-outline"
                 title="Vote"
                 subtitle="Votez pour votre destination préférée"
-                status="todo"
+                status={
+                  destinationSelected
+                    ? 'done'
+                    : hasDestinationProposals
+                      ? 'current'
+                      : 'todo'
+                }
               />
 
               <DesktopProjectStep
                 icon="flag-outline"
                 title="Destination finale"
                 subtitle="Validez le choix du groupe"
-                status="todo"
+                status={destinationSelected ? 'done' : 'todo'}
               />
 
               <DesktopProjectStep
                 icon="briefcase-outline"
                 title="Organisation"
                 subtitle="Préparez votre voyage"
-                status="todo"
+                status={destinationSelected ? 'current' : 'todo'}
               />
             </View>
           </View>
@@ -451,6 +509,8 @@ export default function TripProjectDetailScreen() {
   const mobileDetailContent = tripProject && (
     <MobileTripProjectDetail
       project={tripProject}
+      hasDestinationProposals={hasDestinationProposals}
+      hasCommonPeriods={hasCommonPeriods}
       onBack={handleBack}
       onParticipantsPress={() =>
         router.push(`/trip-projects/${tripProject.id}/participants`)
@@ -611,7 +671,36 @@ export default function TripProjectDetailScreen() {
 function getProgressAnnouncement(
   participantsDone: boolean,
   availabilitiesDone: boolean,
+  hasCommonPeriods: boolean,
+  hasDestinationProposals: boolean,
+  destinationSelected: boolean,
 ) {
+  if (destinationSelected) {
+    return {
+      icon: 'checkmark-circle-outline' as const,
+      title: 'Destination choisie',
+      message:
+        'La destination finale est validée. Vous pouvez maintenant organiser le voyage.',
+    };
+  }
+
+  if (hasDestinationProposals) {
+    return {
+      icon: 'heart-outline' as const,
+      title: 'Destinations proposées',
+      message:
+        'Les propositions sont prêtes. Le groupe peut maintenant voter.',
+    };
+  }
+  if (hasCommonPeriods) {
+    return {
+      icon: 'location-outline' as const,
+      title: 'Périodes communes trouvées',
+      message:
+        'Le groupe a des dates compatibles. Vous pouvez maintenant proposer des destinations.',
+    };
+  }
+
   if (availabilitiesDone) {
     return {
       icon: 'git-compare-outline' as const,
@@ -640,6 +729,8 @@ function getProgressAnnouncement(
 
 type MobileTripProjectDetailProps = {
   project: TripProjectDetail;
+  hasCommonPeriods: boolean;
+  hasDestinationProposals: boolean;
   onBack: () => void;
   onParticipantsPress: () => void;
   onAvailabilitiesPress: () => void;
@@ -650,6 +741,8 @@ type MobileTripProjectDetailProps = {
 function MobileTripProjectDetail({
   project,
   onBack,
+  hasCommonPeriods,
+  hasDestinationProposals,
   onParticipantsPress,
   onAvailabilitiesPress,
   onDestinationsPress,
@@ -662,9 +755,15 @@ function MobileTripProjectDetail({
   const participantsDone = project.participantsStepCompleted;
   const availabilitiesDone = project.availabilitiesStepCompleted;
 
+  const destinationSelected = project.selectedDestination != null;
+
   const completedSteps =
     Number(participantsDone) +
-    Number(availabilitiesDone);
+    Number(availabilitiesDone) +
+    Number(hasCommonPeriods) +
+    Number(hasDestinationProposals) + // Destinations
+    Number(destinationSelected) +     // Vote
+    Number(destinationSelected);      // Destination finale
 
   const progressPercentage = Math.round(
     (completedSteps / 7) * 100,
@@ -673,6 +772,9 @@ function MobileTripProjectDetail({
   const announcement = getProgressAnnouncement(
     participantsDone,
     availabilitiesDone,
+    hasCommonPeriods,
+    hasDestinationProposals,
+    destinationSelected,
   );
 
   return (
@@ -853,7 +955,13 @@ function MobileTripProjectDetail({
             icon="git-compare-outline"
             title="Périodes communes"
             subtitle="Trouvez les dates qui conviennent à tous"
-            status={availabilitiesDone ? 'current' : 'todo'}
+            status={
+              hasCommonPeriods
+                ? 'done'
+                : availabilitiesDone
+                  ? 'current'
+                  : 'todo'
+            }
           />
 
           <MobileProjectStep
@@ -864,7 +972,15 @@ function MobileTripProjectDetail({
                 ? destination
                 : 'Choisissez où partir'
             }
-            status="todo"
+            status={
+              destinationSelected
+                ? 'done'
+                : hasDestinationProposals
+                  ? 'done'
+                  : hasCommonPeriods
+                    ? 'current'
+                    : 'todo'
+            }
             onPress={onDestinationsPress}
           />
 
@@ -872,21 +988,27 @@ function MobileTripProjectDetail({
             icon="heart-outline"
             title="Vote"
             subtitle="Votez pour votre destination préférée"
-            status="todo"
+            status={
+              destinationSelected
+                ? 'done'
+                : hasDestinationProposals
+                  ? 'current'
+                  : 'todo'
+            }
           />
 
           <MobileProjectStep
             icon="flag-outline"
             title="Destination finale"
             subtitle="Validez le choix du groupe"
-            status="todo"
+            status={destinationSelected ? 'done' : 'todo'}
           />
 
           <MobileProjectStep
             icon="briefcase-outline"
             title="Organisation"
             subtitle="Préparez votre voyage"
-            status="todo"
+            status={destinationSelected ? 'current' : 'todo'}
           />
         </View>
       </View>
@@ -897,15 +1019,24 @@ function MobileTripProjectDetail({
 function ProgressAnnouncement({
   participantsDone,
   availabilitiesDone,
+  hasCommonPeriods,
+  hasDestinationProposals,
+  destinationSelected,
   onPress,
 }: {
   participantsDone: boolean;
   availabilitiesDone: boolean;
+  hasCommonPeriods: boolean;
+  hasDestinationProposals: boolean;
+  destinationSelected: boolean;
   onPress: () => void;
 }) {
   const announcement = getProgressAnnouncement(
     participantsDone,
     availabilitiesDone,
+    hasCommonPeriods,
+    hasDestinationProposals,
+    destinationSelected,
   );
 
   return (

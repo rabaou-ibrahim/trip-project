@@ -62,7 +62,7 @@ final class TripProjectController extends AbstractController
 
         if ($startDate !== null && $startDate !== '') {
             try {
-                $tripProject->setStartDate(new \DateTime($startDate));
+                $tripProject->setStartDate(new \DateTimeImmutable($startDate));
             } catch (\Exception) {
                 return $this->json(
                     ['message' => 'La date de début est invalide.'],
@@ -73,7 +73,7 @@ final class TripProjectController extends AbstractController
 
         if ($endDate !== null && $endDate !== '') {
             try {
-                $tripProject->setEndDate(new \DateTime($endDate));
+                $tripProject->setEndDate(new \DateTimeImmutable($endDate));
             } catch (\Exception) {
                 return $this->json(
                     ['message' => 'La date de fin est invalide.'],
@@ -206,13 +206,8 @@ final class TripProjectController extends AbstractController
             $acceptedParticipantCount =
         $participantRepository->countAcceptedForProject($tripProject);
 
-        $usersWithAvailabilityCount =
-        $availabilityRepository->countDistinctUsersForProject($tripProject);
-
         $availabilitiesStepCompleted =
-        $tripProject->isParticipantsStepCompleted()
-        && $acceptedParticipantCount > 0
-        && $usersWithAvailabilityCount >= $acceptedParticipantCount;
+        $tripProject->isAvailabilitiesStepCompleted();
 
         return $this->json(array_merge(
         $this->serializeTripProject(
@@ -339,7 +334,7 @@ final class TripProjectController extends AbstractController
             $tripProject->setStartDate(null);
         } else {
             try {
-                $tripProject->setStartDate(new \DateTime((string) $data['startDate']));
+                $tripProject->setStartDate(new \DateTimeImmutable((string) $data['startDate']));
             } catch (\Exception) {
                 return $this->json(
                     ['message' => 'La date de début est invalide.'],
@@ -354,7 +349,7 @@ final class TripProjectController extends AbstractController
             $tripProject->setEndDate(null);
         } else {
             try {
-                $tripProject->setEndDate(new \DateTime((string) $data['endDate']));
+                $tripProject->setEndDate(new \DateTimeImmutable((string) $data['endDate']));
             } catch (\Exception) {
                 return $this->json(
                     ['message' => 'La date de fin est invalide.'],
@@ -428,94 +423,114 @@ final class TripProjectController extends AbstractController
     }
 
     #[Route(
-    '/api/trip-projects/{id}/close-destination-vote',
-    name: 'api_trip_project_close_destination_vote',
-    methods: ['PATCH']
-)]
-public function closeDestinationVote(
-    int $id,
-    EntityManagerInterface $entityManager,
-    #[CurrentUser] User $user
-): JsonResponse {
-    $tripProject = $entityManager
-        ->getRepository(TripProject::class)
-        ->find($id);
+        '/api/trip-projects/{id}/close-destination-vote',
+        name: 'api_trip_project_close_destination_vote',
+        methods: ['PATCH']
+    )]
+    public function closeDestinationVote(
+        int $id,
+        EntityManagerInterface $entityManager,
+        #[CurrentUser] User $user
+    ): JsonResponse {
+        $tripProject = $entityManager
+            ->getRepository(TripProject::class)
+            ->find($id);
 
-    if (!$tripProject) {
-        return $this->json(
-            ['message' => 'Projet introuvable.'],
-            Response::HTTP_NOT_FOUND
-        );
-    }
+        if (!$tripProject) {
+            return $this->json(
+                ['message' => 'Projet introuvable.'],
+                Response::HTTP_NOT_FOUND
+            );
+        }
 
-    $participation = $entityManager
-        ->getRepository(TripParticipant::class)
-        ->findOneBy([
-            'user' => $user,
-            'tripProject' => $tripProject,
-            'status' => 'ACCEPTED',
-        ]);
-
-    if (!$participation || $participation->getRole() !== 'OWNER') {
-        return $this->json(
-            ['message' => 'Seul le propriétaire peut clôturer le vote.'],
-            Response::HTTP_FORBIDDEN
-        );
-    }
-
-    // Empêche une deuxième clôture.
-    if ($tripProject->getSelectedDestination() !== null) {
-        return $this->json(
-            ['message' => 'Le vote a déjà été clôturé.'],
-            Response::HTTP_CONFLICT
-        );
-    }
-
-    $proposals = $entityManager
-        ->getRepository(DestinationProposal::class)
-        ->findBy([
-            'tripProject' => $tripProject,
-        ]);
-
-    if (count($proposals) === 0) {
-        return $this->json(
-            ['message' => 'Aucune destination n’a été proposée.'],
-            Response::HTTP_BAD_REQUEST
-        );
-    }
-
-    $winner = null;
-    $bestVoteCount = -1;
-    $tie = false;
-
-    foreach ($proposals as $proposal) {
-        $voteCount = $entityManager
-            ->getRepository(DestinationVote::class)
-            ->count([
-                'destinationProposal' => $proposal,
+        $participation = $entityManager
+            ->getRepository(TripParticipant::class)
+            ->findOneBy([
+                'user' => $user,
+                'tripProject' => $tripProject,
+                'status' => 'ACCEPTED',
             ]);
 
-        if ($voteCount > $bestVoteCount) {
-            $bestVoteCount = $voteCount;
-            $winner = $proposal;
-            $tie = false;
-        } elseif ($voteCount === $bestVoteCount) {
-            $tie = true;
+        if (!$participation || $participation->getRole() !== 'OWNER') {
+            return $this->json(
+                ['message' => 'Seul le propriétaire peut clôturer le vote.'],
+                Response::HTTP_FORBIDDEN
+            );
         }
-    }
 
-    if ($bestVoteCount === 0) {
-        return $this->json(
-            ['message' => 'Aucun participant n’a encore voté.'],
-            Response::HTTP_CONFLICT
-        );
-    }
+        // Empêche une deuxième clôture.
+        if ($tripProject->getSelectedDestination() !== null) {
+            return $this->json(
+                ['message' => 'Le vote a déjà été clôturé.'],
+                Response::HTTP_CONFLICT
+            );
+        }
 
-    if ($tie) {
-        return $this->json(
-            ['message' => 'Le vote est à égalité entre plusieurs destinations.'],
-            Response::HTTP_CONFLICT
-        );
+        $proposals = $entityManager
+            ->getRepository(DestinationProposal::class)
+            ->findBy([
+                'tripProject' => $tripProject,
+            ]);
+
+        if (count($proposals) === 0) {
+            return $this->json(
+                ['message' => 'Aucune destination n’a été proposée.'],
+                Response::HTTP_BAD_REQUEST
+            );
+        }
+
+        $winner = null;
+        $bestVoteCount = -1;
+        $tie = false;
+
+        foreach ($proposals as $proposal) {
+            $voteCount = $entityManager
+                ->getRepository(DestinationVote::class)
+                ->count([
+                    'destinationProposal' => $proposal,
+                ]);
+
+            if ($voteCount > $bestVoteCount) {
+                $bestVoteCount = $voteCount;
+                $winner = $proposal;
+                $tie = false;
+            } elseif ($voteCount === $bestVoteCount) {
+                $tie = true;
+            }
+        }
+
+        if ($bestVoteCount === 0) {
+            return $this->json(
+                ['message' => 'Aucun participant n’a encore voté.'],
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        if ($tie) {
+        $tiedProposals = [];
+
+        foreach ($proposals as $proposal) {
+            $voteCount = $entityManager
+                ->getRepository(DestinationVote::class)
+                ->count([
+                    'destinationProposal' => $proposal,
+                ]);
+
+            if ($voteCount === $bestVoteCount) {
+                $tiedProposals[] = [
+                    'id' => $proposal->getId(),
+                    'city' => $proposal->getCity(),
+                    'country' => $proposal->getCountry(),
+                    'votes' => $voteCount,
+                ];
+            }
+        }
+
+        return $this->json([
+            'message' => 'Le vote est à égalité.',
+            'tie' => true,
+            'proposals' => $tiedProposals,
+        ], Response::HTTP_CONFLICT);
     }
 
     $tripProject
@@ -534,6 +549,73 @@ public function closeDestinationVote(
         'votes' => $bestVoteCount,
     ]);
 }
+
+#[Route(
+    '/api/trip-projects/{id}/select-destination',
+    name: 'api_trip_project_select_destination',
+    methods: ['PATCH']
+)]
+public function selectDestination(
+    int $id,
+    Request $request,
+    EntityManagerInterface $entityManager,
+    TripParticipantRepository $participantRepository,
+    #[CurrentUser] User $user
+): JsonResponse {
+    $tripProject = $entityManager
+        ->getRepository(TripProject::class)
+        ->find($id);
+
+    if (!$tripProject) {
+        return $this->json(
+            ['message' => 'Projet introuvable.'],
+            Response::HTTP_NOT_FOUND
+        );
+    }
+
+    $membership = $participantRepository
+        ->findAcceptedMembership($user, $tripProject);
+
+    if (!$membership || $membership->getRole() !== 'OWNER') {
+        return $this->json(
+            ['message' => 'Seul le propriétaire peut départager le vote.'],
+            Response::HTTP_FORBIDDEN
+        );
+    }
+
+    $data = $request->toArray();
+    $proposalId = $data['destinationProposalId'] ?? null;
+
+    $proposal = $entityManager
+        ->getRepository(DestinationProposal::class)
+        ->find($proposalId);
+
+    if (
+        !$proposal ||
+        $proposal->getTripProject()->getId() !== $tripProject->getId()
+    ) {
+        return $this->json(
+            ['message' => 'Destination invalide.'],
+            Response::HTTP_BAD_REQUEST
+        );
+    }
+
+    $tripProject
+        ->setSelectedDestination($proposal)
+        ->setUpdatedAt(new \DateTimeImmutable());
+
+    $entityManager->flush();
+
+    return $this->json([
+        'message' => 'Destination finale sélectionnée.',
+        'selectedDestination' => [
+            'id' => $proposal->getId(),
+            'city' => $proposal->getCity(),
+            'country' => $proposal->getCountry(),
+        ],
+    ]);
+}
+
     /**
      * @return array<string, mixed>
      */
@@ -701,6 +783,13 @@ public function closeDestinationVote(
             ], Response::HTTP_FORBIDDEN);
         }
 
+        $acceptedParticipantCount = $participantRepository->countAcceptedForProject($tripProject);
+
+        if ($acceptedParticipantCount < 2) {
+            return $this->json([
+                'message' => 'Au moins un autre participant doit être invité au projet.',
+            ], Response::HTTP_CONFLICT);
+        }
         $tripProject->setParticipantsStepCompleted(true);
         $tripProject->setUpdatedAt(new \DateTimeImmutable());
 

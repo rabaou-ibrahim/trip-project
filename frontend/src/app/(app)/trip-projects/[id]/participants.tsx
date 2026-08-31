@@ -438,7 +438,7 @@ export default function TripProjectParticipantsScreen() {
 
             <Text style={styles.completeStepDescription}>
               {project.participantsStepCompleted
-                ? 'Cette étape est terminée. Vous pouvez maintenant passer aux disponibilités.'
+                ? 'Chaque participant a ajouté ses disponibilités. Vous pouvez maintenant passer aux disponibilités ou encore modifier les vôtres.'
                 : 'Lorsque vous estimez avoir terminé les invitations, validez cette étape pour poursuivre la préparation.'}
             </Text>
           </View>

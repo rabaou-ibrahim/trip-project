@@ -66,6 +66,7 @@
       const today = new Date();
       return new Date(today.getFullYear(), today.getMonth(), 1);
     });
+    const [datePickerOpen, setDatePickerOpen] = useState(false);
 
     const [selectionStart, setSelectionStart] = useState<string | null>(null);
     const [selectionEnd, setSelectionEnd] = useState<string | null>(null);
@@ -276,7 +277,18 @@
               />
             </Pressable>
 
-            <Text style={styles.monthTitle}>{monthLabel}</Text>
+            <Pressable
+              onPress={() => setDatePickerOpen(current => !current)}
+              style={styles.monthSelector}
+            >
+              <Text style={styles.monthTitle}>{monthLabel}</Text>
+
+              <Ionicons
+                name={datePickerOpen ? 'chevron-up' : 'chevron-down'}
+                size={15}
+                color={colors.textSecondary}
+              />
+            </Pressable>
 
             <Pressable
               onPress={() => changeMonth(1)}
@@ -294,14 +306,80 @@
               />
             </Pressable>
           </View>
+          {datePickerOpen && (
+            <View style={styles.datePicker}>
+              <Text style={styles.pickerLabel}>Année</Text>
+
+              <View style={styles.yearGrid}>
+                {Array.from({ length: 11 }, (_, index) => {
+                  const pickerYear = new Date().getFullYear() + index;
+
+                  return (
+                    <Pressable
+                      key={pickerYear}
+                      onPress={() =>
+                        setDisplayedMonth(
+                          new Date(pickerYear, displayedMonth.getMonth(), 1),
+                        )
+                      }
+                      style={[
+                        styles.yearButton,
+                        year === pickerYear && styles.pickerButtonActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.pickerButtonText,
+                          year === pickerYear && styles.pickerButtonTextActive,
+                        ]}
+                      >
+                        {pickerYear}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.pickerLabel}>Mois</Text>
+
+              <View style={styles.monthGrid}>
+                {[
+                  'Jan', 'Fév', 'Mar', 'Avr',
+                  'Mai', 'Juin', 'Juil', 'Août',
+                  'Sep', 'Oct', 'Nov', 'Déc',
+                ].map((month, index) => (
+                  <Pressable
+                    key={month}
+                    onPress={() => {
+                      setDisplayedMonth(new Date(year, index, 1));
+                      setDatePickerOpen(false);
+                    }}
+                    style={[
+                      styles.monthPickerButton,
+                      monthIndex === index && styles.pickerButtonActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pickerButtonText,
+                        monthIndex === index && styles.pickerButtonTextActive,
+                      ]}
+                    >
+                      {month}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
 
           <View style={styles.weekRow}>
-    {WEEKDAYS.map(day => (
-      <Text key={day} style={styles.weekday}>
-        {day}
-      </Text>
-    ))}
-  </View>
+            {WEEKDAYS.map(day => (
+              <Text key={day} style={styles.weekday}>
+                {day}
+              </Text>
+            ))}
+          </View>
 
   <View style={styles.daysGrid}>
     {Array.from({ length: emptyCells }).map((_, index) => (
@@ -824,6 +902,74 @@
     periodActions: {
       flexDirection: 'row',
       gap: 4,
+    },
+
+    monthSelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+    },
+
+    datePicker: {
+      marginTop: spacing.md,
+      padding: spacing.md,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+    },
+
+    pickerLabel: {
+      marginBottom: spacing.sm,
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: typography.fontFamily.semibold,
+    },
+
+    yearGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginBottom: spacing.lg,
+    },
+
+    yearButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderRadius: radius.md,
+      backgroundColor: colors.surfaceMuted,
+    },
+
+    monthGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+    },
+
+    monthPickerButton: {
+      width: '22%',
+      paddingVertical: spacing.sm,
+      alignItems: 'center',
+      borderRadius: radius.md,
+      backgroundColor: colors.surfaceMuted,
+    },
+
+    pickerButtonActive: {
+      backgroundColor: colors.primary,
+    },
+
+    pickerButtonText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontFamily: typography.fontFamily.medium,
+    },
+
+    pickerButtonTextActive: {
+      color: '#FFFFFF',
+      fontFamily: typography.fontFamily.semibold,
     },
 
     iconButton: {
